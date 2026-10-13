@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -146,9 +153,82 @@ test("a reused space id starts conservatively in a new browser instance", async 
     assert.equal(baseline.unmanagedTargets["target-existing"], "unknown");
 
     const persisted = JSON.parse(
-      await readFile(join(rootDir, "space-7.json"), "utf8"),
+      await readFile(join(rootDir, "space-7@browser-b.json"), "utf8"),
     );
     assert.equal(persisted.browserInstanceId, "browser-b");
+  });
+});
+
+test("concurrent browser instances keep separate ledgers for the same space id", async () => {
+  await withTempLedger(async (rootDir) => {
+    const browserA = new PageLedgerStore({
+      rootDir,
+      browserInstanceId: "browser-host:101",
+    });
+    const browserB = new PageLedgerStore({
+      rootDir,
+      browserInstanceId: "browser-host:202",
+    });
+
+    const pageA = await browserA.initializeCreatedSpace(1, "target-a");
+    const pageB = await browserB.initializeCreatedSpace(1, "target-b");
+    await browserB.addPage(1, "target-b2");
+    await browserA.addPage(1, "target-a2");
+
+    assert.deepEqual(await browserA.getPage(1, "p1"), pageA);
+    assert.deepEqual(await browserB.getPage(1, "p1"), pageB);
+    assert.equal((await browserA.getPage(1, "p2")).targetId, "target-a2");
+    assert.equal((await browserB.getPage(1, "p2")).targetId, "target-b2");
+
+    await browserB.discard(1);
+    assert.deepEqual(await browserA.getPage(1, "p1"), pageA);
+    assert.deepEqual((await readdir(rootDir)).sort(), [
+      "space-1@browser-host-101.json",
+    ]);
+  });
+});
+
+test("a shared-name ledger from this browser instance moves to its own file", async () => {
+  await withTempLedger(async (rootDir) => {
+    const legacyPath = join(rootDir, "space-7.json");
+    await writeFile(
+      legacyPath,
+      JSON.stringify({
+        browserInstanceId: "browser-host:101",
+        spaceId: 7,
+        nextLabel: 2,
+        usedLabels: ["p1"],
+        releasedLabels: [],
+        initialized: true,
+        userControlPending: false,
+        unmanagedTargets: {},
+        pages: {
+          p1: { targetId: "target-live", openedBy: "agent" },
+        },
+      }),
+    );
+
+    const otherBrowser = new PageLedgerStore({
+      rootDir,
+      browserInstanceId: "browser-host:202",
+    });
+    assert.deepEqual((await otherBrowser.read(7)).pages, {});
+    await readFile(legacyPath, "utf8");
+
+    const sameBrowser = new PageLedgerStore({
+      rootDir,
+      browserInstanceId: "browser-host:101",
+    });
+    assert.equal((await sameBrowser.getPage(7, "p1")).targetId, "target-live");
+    await assert.rejects(() => readFile(legacyPath, "utf8"), {
+      code: "ENOENT",
+    });
+    assert.equal(
+      JSON.parse(
+        await readFile(join(rootDir, "space-7@browser-host-101.json"), "utf8"),
+      ).pages.p1.targetId,
+      "target-live",
+    );
   });
 });
 
@@ -181,9 +261,12 @@ test("a ledger from before instance ids is preserved and backfilled", async () =
       openedBy: "agent",
     });
     assert.equal(
-      JSON.parse(await readFile(path, "utf8")).browserInstanceId,
+      JSON.parse(
+        await readFile(join(rootDir, "space-7@browser-current.json"), "utf8"),
+      ).browserInstanceId,
       "browser-current",
     );
+    await assert.rejects(() => readFile(path, "utf8"), { code: "ENOENT" });
   });
 });
 

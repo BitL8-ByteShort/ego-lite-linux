@@ -347,10 +347,7 @@ export function pageLoadStatesCase() {
       });
       document.body.append(button);
     }, baseUrl + "/secondary?page-load-states=delayed-popup");
-    const ledgerPath = join(
-      process.env.EGO_BROWSER_STATE_DIR,
-      "space-" + task.spaceId + ".json"
-    );
+    const ledgerPath = await pageLedgerPath(task.spaceId);
     const beforeLedger = JSON.parse(await readFile(ledgerPath, "utf8"));
     const beforeTargets = new Set(
       Object.values(beforeLedger.pages).map((entry) => entry.targetId)
