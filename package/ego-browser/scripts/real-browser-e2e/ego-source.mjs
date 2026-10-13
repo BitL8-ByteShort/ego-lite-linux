@@ -12,7 +12,7 @@ export function egoSource(body, context) {
     keepTaskSpace,
   } = context;
   return `
-    const { readFile, stat, writeFile } = await import("node:fs/promises");
+    const { readFile, readdir, stat, writeFile } = await import("node:fs/promises");
     const { join } = await import("node:path");
     const { inflateSync } = await import("node:zlib");
     const taskName = ${JSON.stringify(taskName)};
@@ -31,6 +31,18 @@ export function egoSource(body, context) {
     // taskSpace() call; page-model reads these values lazily.
     process.env.EGO_BROWSER_STATE_DIR = join(tempDir, "runtime-state");
     process.env.EGO_BROWSER_PAGE_BUDGET = "3";
+
+    // Ledger files are scoped by browser instance; this isolated state
+    // directory belongs to the one Ego Lite instance under test.
+    async function pageLedgerPath(spaceId) {
+      const stateDir = process.env.EGO_BROWSER_STATE_DIR;
+      const prefix = "space-" + spaceId + "@";
+      const names = (await readdir(stateDir)).filter(
+        (name) => name.startsWith(prefix) && name.endsWith(".json")
+      );
+      assertEqual(names.length, 1, "one page ledger exists for space " + spaceId);
+      return join(stateDir, names[0]);
+    }
 
     let __assertionCount = 0;
 
