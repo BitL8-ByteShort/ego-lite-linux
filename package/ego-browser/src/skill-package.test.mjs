@@ -10,7 +10,10 @@ const guideSource = fileURLToPath(
   new URL("../skill-body/SKILL.md", import.meta.url),
 );
 
-test("the bundled usage guide is the source guide between version and end markers", async () => {
+const codeFences = (markdown) => markdown.match(/^```[^\n]*\n[\s\S]*?^```$/gm);
+const words = (markdown) => markdown.split(/\s+/).filter(Boolean);
+
+test("the bundled usage guide is the unwrapped source guide between version and end markers", async () => {
   const bundled = await readFile(join(outDir, "ego-browser/SKILL.md"), "utf8");
   const source = await readFile(guideSource, "utf8");
   const version = /^version: "([^"]+)"$/m.exec(source)[1];
@@ -22,9 +25,12 @@ test("the bundled usage guide is the source guide between version and end marker
     `[ego-browser:skill] ego-browser usage guide v${version}`,
   );
   assert.equal(lines.at(-1), `[ego-browser:skill] end of guide v${version}`);
-  assert.ok(
-    bundled.includes(source.replace(/^---\n[\s\S]*?\n---\n/, "").trim()),
-  );
+  const body = source.replace(/^---\n[\s\S]*?\n---\n/, "").trim();
+  const bundledBody = lines.slice(2, -2).join("\n");
+  assert.deepEqual(words(bundledBody), words(body));
+  assert.deepEqual(codeFences(bundledBody), codeFences(body));
+  assert.ok(bundledBody.split("\n").length < body.split("\n").length);
+  assert.ok(!/^ {2,}\S/m.test(bundledBody.replace(/^```[\s\S]*?^```$/gm, "")));
   assert.ok(bundled.length <= 25_000);
 });
 
