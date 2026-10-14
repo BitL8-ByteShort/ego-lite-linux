@@ -115,6 +115,7 @@ try {
 
 // Replace the source frontmatter with the version line and end marker that
 // `ego-browser skill` prints verbatim; agents use the marker to detect truncation.
+// The source wraps prose at 80 columns for review; the printed guide unwraps it.
 function renderGuide(source) {
   const match = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/.exec(source);
   const version = match && /^version: "([^"]+)"$/m.exec(match[1])?.[1];
@@ -124,7 +125,7 @@ function renderGuide(source) {
   const guide = [
     `[ego-browser:skill] ego-browser usage guide v${version}`,
     "",
-    match[2].trim(),
+    unwrapProse(match[2].trim()),
     "",
     `[ego-browser:skill] end of guide v${version}`,
     "",
@@ -135,6 +136,32 @@ function renderGuide(source) {
     );
   }
   return guide;
+}
+
+// Join soft-wrapped Markdown lines with a space, which renders identically.
+// Code fences, headings, list items, tables, and blockquotes start new lines.
+function unwrapProse(markdown) {
+  const startsBlock = /^\s*(```|#|[-*+] |\d+\. |\||>)/;
+  const lines = [];
+  let inFence = false;
+  for (const line of markdown.split("\n")) {
+    const fence = /^\s*```/.test(line);
+    const previous = lines.at(-1);
+    if (
+      !inFence &&
+      !fence &&
+      line.trim() &&
+      previous?.trim() &&
+      !startsBlock.test(line) &&
+      !/^\s*(```|#|\|)/.test(previous)
+    ) {
+      lines[lines.length - 1] = `${previous} ${line.trim()}`;
+    } else {
+      lines.push(line);
+    }
+    if (fence) inFence = !inFence;
+  }
+  return lines.join("\n");
 }
 
 async function tsEntryPoints(dirs) {
