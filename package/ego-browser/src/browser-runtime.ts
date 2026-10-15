@@ -189,6 +189,7 @@ function targetState(targetId) {
           frameId?: string;
           loaderId?: string;
           type?: string;
+          url?: string;
         }
       >(),
       ignoredFaviconRequestIds: new Set<string>(),
@@ -920,10 +921,12 @@ export function networkActivity(sessionIds: string[]): {
   tracking: boolean;
   inflight: number;
   lastActivityAt: number;
+  pendingRequests: string[];
 } {
   let tracking = sessionIds.length > 0;
   let inflight = 0;
   let lastActivityAt = 0;
+  const pendingRequests: string[] = [];
   for (const sessionId of new Set(sessionIds)) {
     const targetId = sessionTargets.get(sessionId);
     const target = targetId ? targetStates.get(targetId) : undefined;
@@ -937,8 +940,13 @@ export function networkActivity(sessionIds: string[]): {
     }
     inflight += target.inflightNetworkRequests.size;
     lastActivityAt = Math.max(lastActivityAt, target.lastNetworkActivityAt);
+    for (const request of target.inflightNetworkRequests.values()) {
+      pendingRequests.push(
+        `${request.type || "Other"} ${request.url || request.requestId}`,
+      );
+    }
   }
-  return { tracking, inflight, lastActivityAt };
+  return { tracking, inflight, lastActivityAt, pendingRequests };
 }
 
 /** Refresh and return the main and known OOPIF sessions for one Page. */
@@ -1306,6 +1314,7 @@ function recordNetworkEvent(targetId: string, target, data): void {
       ...(typeof data.params?.type === "string"
         ? { type: data.params.type }
         : {}),
+      ...(typeof url === "string" ? { url } : {}),
     });
     target.lastNetworkActivityAt = state.now();
     return;

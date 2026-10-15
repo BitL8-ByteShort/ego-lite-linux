@@ -374,6 +374,7 @@ type PageModelServices = {
     tracking: boolean;
     inflight: number;
     lastActivityAt: number;
+    pendingRequests?: string[];
   };
   ensureSession(targetId: string): Promise<string>;
   ensureFrameSessions(
