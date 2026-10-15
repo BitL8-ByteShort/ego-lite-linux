@@ -40,6 +40,7 @@ type PageWaitServices = {
     tracking: boolean;
     inflight: number;
     lastActivityAt: number;
+    pendingRequests?: string[];
   };
   now(): number;
   sleep(ms: number): Promise<void>;
@@ -884,6 +885,7 @@ async function waitForNetworkIdle(
 ): Promise<void> {
   const deadline = services.now() + timeoutMs;
   let sessionIds: string[] = [];
+  let lastActivity: ReturnType<PageWaitServices["networkActivity"]> | undefined;
   while (services.now() <= deadline) {
     try {
       // OOPIFs can appear while the Page is loading. Refreshing before every
@@ -898,6 +900,7 @@ async function waitForNetworkIdle(
       if (trackingBudget <= 0) break;
       await services.ensureNetworkTracking(sessionIds, trackingBudget);
       const activity = services.networkActivity(sessionIds);
+      lastActivity = activity;
       if (
         activity.tracking &&
         activity.inflight === 0 &&
@@ -914,8 +917,21 @@ async function waitForNetworkIdle(
     await services.sleep(Math.min(50, waitMs));
   }
   throw new Error(
-    `page.waitForLoadState(networkidle) timed out after ${timeoutMs}ms`,
+    `page.waitForLoadState(networkidle) timed out after ${timeoutMs}ms` +
+      describeNetworkActivity(lastActivity),
   );
+}
+
+function describeNetworkActivity(
+  activity: ReturnType<PageWaitServices["networkActivity"]> | undefined,
+): string {
+  if (!activity) return "";
+  if (!activity.tracking) return " (network tracking unavailable)";
+  const pending = activity.pendingRequests || [];
+  if (pending.length === 0) return "";
+  const shown = pending.slice(0, 5).join(", ");
+  const more = pending.length > 5 ? ` and ${pending.length - 5} more` : "";
+  return ` (${pending.length} requests still in flight: ${shown}${more})`;
 }
 
 function isRetryableNetworkRefreshError(error: unknown): boolean {

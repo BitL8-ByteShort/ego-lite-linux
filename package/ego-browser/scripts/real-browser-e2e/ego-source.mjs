@@ -265,11 +265,51 @@ export function egoSource(body, context) {
       return tab;
     }
 
+    // Page ledgers persist across cases and the budget is three Pages. Record
+    // the Pages each space already had so a failed case can close only the
+    // Pages it opened instead of exhausting the budget for every later case.
+    // Read the ledger file: task.pages() can adopt the active tab as a Page.
+    const __pagesBeforeCase = new Map();
+    const __taskSpace = taskSpace;
+    taskSpace = async (...args) => {
+      const task = await __taskSpace(...args);
+      if (!__pagesBeforeCase.has(task.spaceId)) {
+        __pagesBeforeCase.set(task.spaceId, {
+          task,
+          targetIds: await ledgerTargetIds(task.spaceId),
+        });
+      }
+      return task;
+    };
+
+    async function ledgerTargetIds(spaceId) {
+      const stateDir = process.env.EGO_BROWSER_STATE_DIR;
+      const prefix = "space-" + spaceId + "@";
+      const names = await readdir(stateDir).catch(() => []);
+      const targetIds = new Set();
+      for (const name of names) {
+        if (!name.startsWith(prefix) || !name.endsWith(".json")) continue;
+        const ledger = JSON.parse(await readFile(join(stateDir, name), "utf8"));
+        for (const page of Object.values(ledger.pages || {})) targetIds.add(page.targetId);
+      }
+      return targetIds;
+    }
+
+    async function closePagesOpenedByCase() {
+      for (const { task, targetIds } of __pagesBeforeCase.values()) {
+        const pages = await task.pages().catch(() => []);
+        for (const page of pages) {
+          if (!targetIds.has(page.targetId)) await page.close().catch(() => {});
+        }
+      }
+    }
+
     try {
       ${body}
       cliLog(JSON.stringify({ ok: true, assertions: __assertionCount }));
     } catch (error) {
       cliLog(JSON.stringify({ ok: false, assertions: __assertionCount, error: error.message }));
+      await closePagesOpenedByCase().catch(() => {});
       error.message = ${JSON.stringify("real browser e2e")} + ": " + error.message;
       throw error;
     }
