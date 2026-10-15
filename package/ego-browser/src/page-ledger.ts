@@ -64,7 +64,9 @@ type ReconcileOptions = {
 };
 
 /**
- * Stores durable page labels in one JSON document per task space. Each update
+ * Stores durable page labels in one JSON document per task space and browser
+ * instance. Space ids restart at 1 in every Ego Lite instance, so concurrent
+ * instances sharing the state directory must not share a file. Each update
  * replaces the complete document with an atomic rename so readers never see a
  * partially written ledger.
  */
@@ -122,7 +124,8 @@ export class PageLedgerStore {
   /** Remove all Page-model state after its task space is finished or closed. */
   async discard(spaceId: number): Promise<void> {
     assertSpaceId(spaceId);
-    await rm(this.#path(spaceId), { force: true });
+    const browserInstanceId = await this.#currentBrowserInstanceId();
+    await rm(this.#path(spaceId, browserInstanceId), { force: true });
   }
 
   async getPage(spaceId: number, label: string): Promise<ManagedPage> {
@@ -364,40 +367,29 @@ export class PageLedgerStore {
   async #readCurrent(spaceId: number): Promise<PageLedger> {
     const browserInstanceId = await this.#currentBrowserInstanceId();
     await this.#cleanupExpiredLedgers(browserInstanceId);
-    const path = this.#path(spaceId);
-    let raw: string;
-    try {
-      raw = await readFile(path, "utf8");
-    } catch (error) {
-      if (error?.code === "ENOENT") {
-        return emptyLedger(spaceId, browserInstanceId);
-      }
-      throw error;
+    const path = this.#path(spaceId, browserInstanceId);
+    const stored = await readLedgerJson(path);
+    if (stored !== undefined) {
+      return (
+        ownedLedger(stored, spaceId, path, browserInstanceId) ||
+        emptyLedger(spaceId, browserInstanceId)
+      );
     }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (error) {
-      throw new Error(`invalid page ledger ${path}: ${error.message}`);
-    }
-    const storedBrowserInstanceId = ledgerBrowserInstanceId(parsed);
-    if (
-      browserInstanceId !== undefined &&
-      storedBrowserInstanceId !== undefined &&
-      storedBrowserInstanceId !== browserInstanceId
-    ) {
-      return emptyLedger(spaceId, browserInstanceId);
-    }
-    const ledger = validateLedger(parsed, spaceId, path);
-    if (
-      browserInstanceId !== undefined &&
-      storedBrowserInstanceId === undefined
-    ) {
-      // Preserve ledgers created before instance ids existed. This one-time
-      // backfill avoids discarding live Page labels during an SDK upgrade.
-      ledger.browserInstanceId = browserInstanceId;
-      await this.#writeAtomic(spaceId, ledger);
-    }
+    if (browserInstanceId === undefined) return emptyLedger(spaceId);
+
+    // Earlier SDKs wrote every instance's ledger to the shared space file.
+    // Move this instance's ledger (or one from before instance ids existed)
+    // so an SDK upgrade does not discard live Page labels.
+    const legacyPath = this.#path(spaceId);
+    const legacy = await readLedgerJson(legacyPath);
+    const ledger =
+      legacy === undefined
+        ? undefined
+        : ownedLedger(legacy, spaceId, legacyPath, browserInstanceId);
+    if (!ledger) return emptyLedger(spaceId, browserInstanceId);
+    ledger.browserInstanceId = browserInstanceId;
+    await this.#writeAtomic(spaceId, ledger);
+    await rm(legacyPath, { force: true });
     return ledger;
   }
 
@@ -434,7 +426,7 @@ export class PageLedgerStore {
     }
     await Promise.all(
       names
-        .filter((name) => /^space-\d+\.json$/.test(name))
+        .filter((name) => /^space-\d+(@[A-Za-z0-9_-]+)?\.json$/.test(name))
         .map(async (name) => {
           const path = join(this.rootDir, name);
           const metadata = await stat(path).catch(() => undefined);
@@ -461,7 +453,7 @@ export class PageLedgerStore {
 
   async #writeAtomic(spaceId: number, ledger: PageLedger): Promise<void> {
     await mkdir(this.rootDir, { recursive: true, mode: 0o700 });
-    const path = this.#path(spaceId);
+    const path = this.#path(spaceId, await this.#currentBrowserInstanceId());
     const temporary = `${path}.${process.pid}.${this.#writeToken}.${++this.#temporarySequence}.tmp`;
     try {
       await writeFile(temporary, `${JSON.stringify(ledger, null, 2)}\n`, {
@@ -474,9 +466,46 @@ export class PageLedgerStore {
     }
   }
 
-  #path(spaceId: number): string {
-    return join(this.rootDir, `space-${spaceId}.json`);
+  #path(spaceId: number, browserInstanceId?: string): string {
+    const scope =
+      browserInstanceId === undefined
+        ? ""
+        : `@${browserInstanceId.replace(/[^A-Za-z0-9_-]/g, "-")}`;
+    return join(this.rootDir, `space-${spaceId}${scope}.json`);
   }
+}
+
+async function readLedgerJson(path: string): Promise<unknown> {
+  let raw: string;
+  try {
+    raw = await readFile(path, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return undefined;
+    throw error;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`invalid page ledger ${path}: ${error.message}`);
+  }
+}
+
+/** Validate a stored ledger, or return undefined when another browser wrote it. */
+function ownedLedger(
+  value: unknown,
+  spaceId: number,
+  path: string,
+  browserInstanceId: string | undefined,
+): PageLedger | undefined {
+  const storedBrowserInstanceId = ledgerBrowserInstanceId(value);
+  if (
+    browserInstanceId !== undefined &&
+    storedBrowserInstanceId !== undefined &&
+    storedBrowserInstanceId !== browserInstanceId
+  ) {
+    return undefined;
+  }
+  return validateLedger(value, spaceId, path);
 }
 
 function emptyLedger(spaceId: number, browserInstanceId?: string): PageLedger {
