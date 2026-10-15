@@ -16,6 +16,10 @@ import {
   markPageObserved,
   recordUnhandledPage,
 } from "../dist/src/page-discovery.js";
+import {
+  recordAgentControlledSpace,
+  releaseAgentControlledSpace,
+} from "../dist/src/agent-control-notice.js";
 
 test("lifecycle flush writes synchronously when stdout exposes an fd", async () => {
   const directory = await mkdtemp(join(tmpdir(), "ego-output-sink-test-"));
@@ -153,6 +157,53 @@ test("a hard stop discards unhandled-page notices with other output", () => {
     label: "p4",
     url: "about:blank",
   });
+  markHardStop("STOP");
+  const out = fakeStream();
+
+  flushSink(out, false);
+
+  assert.equal(out.text(), "STOP\n");
+});
+
+test("flushSink reminds the Agent about spaces it still controls", () => {
+  resetSink();
+  bufferOutput("done\n");
+  recordUnhandledPage({
+    spaceId: 7,
+    targetId: "target-popup",
+    label: "p4",
+    url: "about:blank",
+  });
+  recordAgentControlledSpace(9);
+  recordAgentControlledSpace(7);
+  recordAgentControlledSpace(8);
+  releaseAgentControlledSpace(8);
+  const out = fakeStream();
+
+  flushSink(out, false);
+
+  const [output, pages, page, notice, rest] = out.text().split("\n");
+  assert.deepEqual(
+    [output, pages, page, rest],
+    ["done", "[ego-browser:pages]", "Unhandled page p4: about:blank", ""],
+  );
+  assert.match(notice, /^\[ego-browser:task\] .* task spaces 7, 9,/);
+  assert.match(notice, /task\.finish\(\{ keep \}\).*task\.handOff\(\)/);
+});
+
+test("a failed round still reminds the Agent to release control", () => {
+  resetSink();
+  recordAgentControlledSpace(7);
+  const out = fakeStream();
+
+  flushSink(out, true);
+
+  assert.match(out.text(), /^\[ego-browser:task\] .* task space 7,/);
+});
+
+test("a hard stop drops the Agent-control reminder", () => {
+  resetSink();
+  recordAgentControlledSpace(7);
   markHardStop("STOP");
   const out = fakeStream();
 

@@ -1,5 +1,9 @@
 import { writeSync } from "node:fs";
 
+import {
+  consumeAgentControlNotice,
+  resetAgentControlledSpaces,
+} from "./agent-control-notice.js";
 import { formatCliLogValue } from "./format.js";
 import {
   consumeUnhandledPageNotices,
@@ -71,6 +75,7 @@ export function flushSink(stream: WritableLike, thrown: boolean): void {
   if (flushed) return;
   flushed = true;
   const pageNotices = consumeUnhandledPageNotices();
+  const controlNotice = consumeAgentControlNotice();
   if (hardStopMessage !== null) {
     // Drop every buffered line — business logs, success rows, and the repeated error
     // echoes — so the owned guidance is all that remains.
@@ -86,6 +91,9 @@ export function flushSink(stream: WritableLike, thrown: boolean): void {
     if (pageNotices.length > 0) {
       stream.write(formatPageNotices(pageNotices));
     }
+    // A hard stop means the user already holds control, so only ordinary
+    // completions and failures remind the Agent to release it.
+    if (controlNotice) stream.write(controlNotice);
   }
   buffer = [];
 }
@@ -96,6 +104,7 @@ export function resetSink(): void {
   hardStopMessage = null;
   flushed = false;
   resetPageNotices();
+  resetAgentControlledSpaces();
 }
 
 function formatPageNotices(notices: UnhandledPageNotice[]): string {

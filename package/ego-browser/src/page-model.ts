@@ -23,6 +23,10 @@ import {
   type FileChooserInterception,
   type FileChooserOpenedEvent,
 } from "./browser-runtime.js";
+import {
+  recordAgentControlledSpace,
+  releaseAgentControlledSpace,
+} from "./agent-control-notice.js";
 import { runtimeValue } from "./cdp-eval.js";
 import { withTemporaryClipboardText } from "./clipboard.js";
 import {
@@ -826,6 +830,7 @@ export async function initializeTaskSpaceHandle(
     await task.initializeCreatedSpace(initializeCreatedSpaceToken);
   }
   await task.initializeBackgroundPageDiscovery(initializeTaskSpaceToken);
+  if (task.ownership === "agent") recordAgentControlledSpace(task.spaceId);
 }
 
 /** Close a newly created space whose Page-model initialization did not commit. */
@@ -1020,6 +1025,7 @@ class TaskSpace {
       try {
         await this.#services.handOffTaskSpace();
         this.#stopBackgroundPageDiscovery();
+        releaseAgentControlledSpace(this.spaceId);
       } catch (error) {
         await this.#services.ledger.cancelUserControl(this.spaceId);
         throw error;
@@ -1113,6 +1119,7 @@ class TaskSpace {
     await this.#services.ledger.discard(this.spaceId);
     this.#stopBackgroundPageDiscovery();
     clearSpacePageNotices(this.spaceId);
+    releaseAgentControlledSpace(this.spaceId);
   }
 
   /**
