@@ -187,6 +187,9 @@ export function pageLoadStatesCase() {
     );
     await faviconPage.close();
 
+    // The markers below are console messages, which Ego automation hooks
+    // keep from reaching the session.
+    await page.cdp("egoAutomated.disable");
     await page.cdp("Runtime.enable");
     const networkEventMarker = "ego-networkidle-event-preserved";
     await page.evaluate(({ url, marker }) => {
@@ -236,6 +239,7 @@ export function pageLoadStatesCase() {
       waitUntil: "domcontentloaded",
       timeout: 2_000,
     });
+    await busyPage.cdp("egoAutomated.disable");
     await busyPage.cdp("Runtime.enable");
     await quietPage.cdp("Runtime.enable");
     await busyPage.events();

@@ -410,6 +410,11 @@ the destination matters.
 For uncommon protocol-event workflows, `await page.events()` returns and clears
 the buffered event array; it is not an EventEmitter.
 
+Page sessions hide page console messages from CDP so sites cannot detect the
+automation. To read `Runtime.consoleAPICalled` while debugging, first call
+`await page.cdp("egoAutomated.disable")`, then `page.cdp("Runtime.enable")`.
+Sites can detect CDP again while it is off.
+
 A synchronous JavaScript dialog may appear as `receipt.dialog` or in
 `page.info()`. Handle it before continuing:
 

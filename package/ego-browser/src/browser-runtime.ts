@@ -175,6 +175,7 @@ function targetState(targetId) {
       sessionAt: 0,
       sessionInflight: null,
       events: [],
+      egoAutomationEnabled: false,
       pageEventsEnabled: false,
       networkDomainEnabled: false,
       networkEnableInflight: null,
@@ -212,6 +213,7 @@ function registerSession(targetId, sessionId) {
   }
   target.sessionId = sessionId;
   target.sessionAt = Date.now();
+  target.egoAutomationEnabled = false;
   target.pageEventsEnabled = false;
   target.networkDomainEnabled = false;
   target.networkEnableInflight = null;
@@ -316,6 +318,7 @@ function clearTargetSession(targetId, { remove = false } = {}) {
   target.sessionAt = 0;
   target.sessionInflight = null;
   target.events.length = 0;
+  target.egoAutomationEnabled = false;
   target.pageEventsEnabled = false;
   target.networkDomainEnabled = false;
   target.networkEnableInflight = null;
@@ -552,6 +555,7 @@ function recordCommandState(method, params, sessionId, response) {
     const attachedSessionId = response.result?.sessionId || response.sessionId;
     if (params?.targetId && attachedSessionId) {
       registerSession(params.targetId, attachedSessionId);
+      enableEgoAutomation(attachedSessionId);
     }
     return;
   }
@@ -636,6 +640,7 @@ export async function ensureSession(
         }
         registerSession(targetId, sessionId);
       }
+      enableEgoAutomation(target.sessionId);
       await Promise.all([
         enablePageEvents(target.sessionId, timeoutMs),
         enableNetworkTrackingForSession(target.sessionId, false, timeoutMs),
@@ -1072,6 +1077,28 @@ export function prepareFileChooser(
   return interception;
 }
 
+/**
+ * Turn on Ego Lite's automation hooks for one renderer session. They keep the
+ * session's Runtime domain from reporting console messages and capturing call
+ * stacks, both of which pages can observe to detect CDP automation. The
+ * browser keeps the flag across renderer swaps, so it is sent once per session
+ * and before anything else, without waiting: older browsers reject the unknown
+ * domain, and a renderer stalled by a dialog must not block attachment.
+ */
+function enableEgoAutomation(sessionId: string): void {
+  const targetId = sessionId ? sessionTargets.get(sessionId) : undefined;
+  const target = targetId ? targetStates.get(targetId) : undefined;
+  if (
+    !target ||
+    target.sessionId !== sessionId ||
+    target.egoAutomationEnabled
+  ) {
+    return;
+  }
+  target.egoAutomationEnabled = true;
+  void rawCdp("egoAutomated.enable", {}, sessionId).catch(() => {});
+}
+
 async function enablePageEvents(sessionId, timeoutMs = RESPONSE_TIMEOUT_MS) {
   const targetId = sessionId ? sessionTargets.get(sessionId) : undefined;
   const target = targetId ? targetStates.get(targetId) : undefined;
@@ -1232,6 +1259,8 @@ function initializeAutoAttachedTarget(
   // Invoke every initializer before awaiting any result. Chromium can pause an
   // OOPIF at attachment, so waiting for Network.enable before sending resume
   // would deadlock if the protocol response depends on renderer progress.
+  // Automation hooks go first so they cover the frame's first script.
+  enableEgoAutomation(sessionId);
   const pageEvents = enablePageEvents(sessionId);
   const networkEvents = enableNetworkTrackingForSession(sessionId);
   const nestedFrames = enableOopifAutoAttach(sessionId);

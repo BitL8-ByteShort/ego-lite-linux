@@ -1027,6 +1027,20 @@ test("auto-attached OOPIFs are instrumented and resumed without waiting for Netw
       childNetworkIndex < childResumeIndex,
       "Network.enable is sent before the child resumes",
     );
+    const childAutomationIndex = sent.findIndex(
+      (request) =>
+        request.method === "egoAutomated.enable" &&
+        request.sessionId === "session:frame-child",
+    );
+    assert.ok(
+      childAutomationIndex >= 0 && childAutomationIndex < childNetworkIndex,
+      "automation hooks are the first command on the child session",
+    );
+    assert.equal(
+      sent.filter((request) => request.method === "egoAutomated.enable").length,
+      2,
+      "the page and the OOPIF session each enable automation hooks once",
+    );
     assert.equal(
       delayedChildNetworkEnable,
       undefined,
@@ -1048,6 +1062,73 @@ test("auto-attached OOPIFs are instrumented and resumed without waiting for Netw
       networkActivity(["session:page-main", "session:frame-child"]).inflight,
       0,
     );
+  } finally {
+    invalidateSession();
+    if (previous === undefined) delete globalThis.ego;
+    else globalThis.ego = previous;
+  }
+});
+
+test("automation hooks are enabled once per session and tolerate older browsers", async () => {
+  const previous = globalThis.ego;
+  const sent = [];
+  let attachCount = 0;
+  const runtime = {
+    sendCDPMessage(payload) {
+      const request = JSON.parse(payload);
+      sent.push(request);
+      queueMicrotask(() => {
+        if (request.method === "egoAutomated.enable") {
+          // Browsers without the Ego automation domain reject the command.
+          runtime.onCDPMessage(
+            JSON.stringify({
+              id: request.id,
+              error: {
+                code: -32601,
+                message: "'egoAutomated.enable' wasn't found",
+              },
+            }),
+          );
+          return;
+        }
+        const result =
+          request.method === "Target.attachToTarget"
+            ? {
+                sessionId: `session:${request.params.targetId}:${++attachCount}`,
+              }
+            : {};
+        runtime.onCDPMessage(JSON.stringify({ id: request.id, result }));
+      });
+    },
+  };
+  globalThis.ego = runtime;
+  const automationSessions = () =>
+    sent
+      .filter((request) => request.method === "egoAutomated.enable")
+      .map((request) => request.sessionId);
+
+  try {
+    const sessionId = await ensureSession("page-main");
+    await ensureSession("page-main");
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(automationSessions(), [sessionId]);
+    assert.equal(
+      sent.findIndex((request) => request.sessionId === sessionId),
+      sent.findIndex((request) => request.method === "egoAutomated.enable"),
+      "automation hooks are the first command on the session",
+    );
+
+    // Scripts that attach their own session, such as js(expr, targetId),
+    // get the hooks before their first command too.
+    const attached = await browserCdp("Target.attachToTarget", {
+      targetId: "frame-child",
+      flatten: true,
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(automationSessions(), [
+      sessionId,
+      attached.result.sessionId,
+    ]);
   } finally {
     invalidateSession();
     if (previous === undefined) delete globalThis.ego;
