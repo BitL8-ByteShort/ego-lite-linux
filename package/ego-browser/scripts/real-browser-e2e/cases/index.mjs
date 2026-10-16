@@ -48,7 +48,10 @@ import {
 } from "./page-download.mjs";
 import { pageOopifActionCase, pageOopifRestoreCase } from "./page-oopif.mjs";
 import { pageLoadStatesCase } from "./page-load-states.mjs";
-import { pageDedicatedWorkerCase } from "./page-workers.mjs";
+import {
+  pageAudioWorkletCase,
+  pageDedicatedWorkerCase,
+} from "./page-workers.mjs";
 import { pageApiAlignmentCase } from "./page-api-alignment.mjs";
 import { pageActionabilityCase } from "./page-actionability.mjs";
 import { pageEvaluateTimeoutCase } from "./page-evaluate-timeout.mjs";
@@ -183,6 +186,7 @@ export const e2eCases = [
   { name: "Page OOPIF restore and close", body: pageOopifRestoreCase },
   { name: "Page load states", body: pageLoadStatesCase },
   { name: "Page dedicated Worker startup", body: pageDedicatedWorkerCase },
+  { name: "Page AudioWorklet startup", body: pageAudioWorkletCase },
   { name: "Page API alignment", body: pageApiAlignmentCase },
   { name: "Page actionability", body: pageActionabilityCase },
   {

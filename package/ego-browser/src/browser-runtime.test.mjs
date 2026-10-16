@@ -1055,7 +1055,87 @@ test("auto-attached OOPIFs are instrumented and resumed without waiting for Netw
   }
 });
 
-test("dedicated workers are auto-attached and resumed immediately", async () => {
+for (const targetType of ["worker", "worklet", "shared_worker"]) {
+  test(`${targetType} targets are auto-attached, resumed, then detached`, async () => {
+    const previous = globalThis.ego;
+    const sent = [];
+    const runtime = {
+      sendCDPMessage(payload) {
+        const request = JSON.parse(payload);
+        sent.push(request);
+        const result =
+          request.method === "Target.attachToTarget"
+            ? { sessionId: "session:page-main" }
+            : {};
+        queueMicrotask(() => {
+          runtime.onCDPMessage(JSON.stringify({ id: request.id, result }));
+        });
+      },
+    };
+    globalThis.ego = runtime;
+
+    try {
+      const mainSessionId = await ensureSession("page-main");
+      const autoAttach = sent.find(
+        (request) =>
+          request.method === "Target.setAutoAttach" &&
+          request.sessionId === mainSessionId,
+      );
+      // No catch-all exclude: Ego Lite pauses excluded targets without
+      // attaching them, which leaves them paused forever.
+      assert.deepEqual(autoAttach?.params?.filter, [{}]);
+
+      runtime.onCDPMessage(
+        JSON.stringify({
+          sessionId: mainSessionId,
+          method: "Target.attachedToTarget",
+          params: {
+            sessionId: "session:child",
+            targetInfo: {
+              targetId: "child",
+              type: targetType,
+              parentId: "page-main",
+            },
+            waitingForDebugger: true,
+          },
+        }),
+      );
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const resumeIndex = sent.findIndex(
+        (request) =>
+          request.method === "Runtime.runIfWaitingForDebugger" &&
+          request.sessionId === "session:child",
+      );
+      const detachIndex = sent.findIndex(
+        (request) =>
+          request.method === "Target.detachFromTarget" &&
+          request.params?.sessionId === "session:child",
+      );
+      assert.ok(resumeIndex >= 0, "a target paused by auto-attach is resumed");
+      assert.ok(
+        detachIndex > resumeIndex,
+        "the session is detached only after the resume was answered",
+      );
+      assert.equal(sent[detachIndex].sessionId, mainSessionId);
+      assert.equal(
+        sent.some(
+          (request) =>
+            request.sessionId === "session:child" &&
+            request.method !== "Runtime.runIfWaitingForDebugger",
+        ),
+        false,
+        "the harness must not drive a non-frame target",
+      );
+    } finally {
+      invalidateSession();
+      if (previous === undefined) delete globalThis.ego;
+      else globalThis.ego = previous;
+    }
+  });
+}
+
+test("explicitly attached pages are never released as related targets", async () => {
   const previous = globalThis.ego;
   const sent = [];
   const runtime = {
@@ -1075,50 +1155,23 @@ test("dedicated workers are auto-attached and resumed immediately", async () => 
 
   try {
     const mainSessionId = await ensureSession("page-main");
-    const autoAttach = sent.find(
-      (request) =>
-        request.method === "Target.setAutoAttach" &&
-        request.sessionId === mainSessionId,
-    );
-    assert.deepEqual(autoAttach?.params?.filter, [
-      { type: "iframe", exclude: false },
-      { type: "worker", exclude: false },
-      { exclude: true },
-    ]);
-
+    // A browser-level Target.attachToTarget also emits attachedToTarget, with
+    // no owning session.
     runtime.onCDPMessage(
       JSON.stringify({
-        sessionId: mainSessionId,
         method: "Target.attachedToTarget",
         params: {
-          sessionId: "session:worker-child",
-          targetInfo: {
-            targetId: "worker-child",
-            type: "worker",
-            parentId: "page-main",
-          },
-          waitingForDebugger: true,
+          sessionId: mainSessionId,
+          targetInfo: { targetId: "page-main", type: "page" },
+          waitingForDebugger: false,
         },
       }),
     );
     await new Promise((resolve) => setImmediate(resolve));
 
-    assert.ok(
-      sent.some(
-        (request) =>
-          request.method === "Runtime.runIfWaitingForDebugger" &&
-          request.sessionId === "session:worker-child",
-      ),
-      "a worker paused by auto-attach must be resumed",
-    );
     assert.equal(
-      sent.some(
-        (request) =>
-          request.method === "Network.enable" &&
-          request.sessionId === "session:worker-child",
-      ),
+      sent.some((request) => request.method === "Target.detachFromTarget"),
       false,
-      "resuming a worker must not opt it into Page network tracking",
     );
   } finally {
     invalidateSession();

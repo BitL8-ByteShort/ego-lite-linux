@@ -20,13 +20,11 @@ const OOPIF_AUTO_ATTACH_PARAMS = {
   autoAttach: true,
   waitForDebuggerOnStart: true,
   flatten: true,
-  // Ego Lite can pause an excluded dedicated worker without attaching it,
-  // leaving no session through which the harness can resume that worker.
-  filter: [
-    { type: "iframe", exclude: false },
-    { type: "worker", exclude: false },
-    { exclude: true },
-  ],
+  // Ego Lite can pause an excluded related target (dedicated worker,
+  // AudioWorklet, ...) without attaching it, leaving no session through which
+  // the harness can resume it. Attach every type; the attach handler resumes
+  // and detaches everything except iframes.
+  filter: [{}],
 };
 // A modal JavaScript dialog stalls every command the renderer has to answer,
 // including Page.getFrameTree, Page.captureScreenshot, DOM.*, Accessibility.*,
@@ -1243,6 +1241,29 @@ function initializeAutoAttachedTarget(
   void Promise.allSettled([pageEvents, networkEvents, nestedFrames, resume]);
 }
 
+/**
+ * Resume a non-frame target (worker, worklet, ...) paused by auto-attach and
+ * drop its session, so the harness never holds a debugger on targets it does
+ * not drive.
+ */
+function releaseAutoAttachedTarget(
+  sessionId: string,
+  parentSessionId: string,
+  waitingForDebugger: boolean,
+): void {
+  // Detach is answered by the browser and could overtake a resume still on its
+  // way to the renderer, so only detach after the resume has been answered.
+  const resume = waitingForDebugger
+    ? rawCdp("Runtime.runIfWaitingForDebugger", {}, sessionId)
+    : Promise.resolve();
+  void resume
+    .catch(() => {})
+    .then(() =>
+      rawCdp("Target.detachFromTarget", { sessionId }, parentSessionId),
+    )
+    .catch(() => {});
+}
+
 function finishNetworkRequest(targetId: string, requestId: string): void {
   const now = state.now();
   const rootTargetId = pageRootTargetId(targetId);
@@ -1488,9 +1509,17 @@ function handleMessage(message) {
         sessionId,
         data.params?.waitingForDebugger === true,
       );
+    } else if (sessionId && sourceTargetId && targetType !== "page") {
+      // Auto-attached by one of this runtime's sessions: a worker, worklet, or
+      // other related target the harness does not drive.
+      releaseAutoAttachedTarget(
+        sessionId,
+        data.sessionId,
+        data.params?.waitingForDebugger === true,
+      );
     } else if (sessionId && data.params?.waitingForDebugger === true) {
       // A foreign auto-attach configuration may still deliver other related
-      // target types. Never leave an unrelated worker paused by this runtime.
+      // target types. Never leave an unrelated target paused by this runtime.
       void rawCdp("Runtime.runIfWaitingForDebugger", {}, sessionId).catch(
         () => {},
       );

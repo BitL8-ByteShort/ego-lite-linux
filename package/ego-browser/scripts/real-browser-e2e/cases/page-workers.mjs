@@ -32,3 +32,44 @@ export function pageDedicatedWorkerCase() {
     await page.close();
   `;
 }
+
+export function pageAudioWorkletCase() {
+  return `
+    const task = await taskSpace(taskName);
+    const page = await newPageAt(task, baseUrl + "/?page-api=audio-worklet");
+    const result = await page.evaluate(async () => {
+      const moduleUrl = URL.createObjectURL(
+        new Blob(
+          [
+            'registerProcessor("e2e-noop", class extends AudioWorkletProcessor {' +
+              " process() { return true; } });",
+          ],
+          { type: "text/javascript" }
+        )
+      );
+      const context = new AudioContext();
+      try {
+        return await Promise.race([
+          context.audioWorklet.addModule(moduleUrl).then(() => {
+            new AudioWorkletNode(context, "e2e-noop");
+            return "worklet-ready";
+          }),
+          new Promise((resolve) =>
+            setTimeout(() => resolve("worklet-timeout"), 3000)
+          ),
+        ]);
+      } catch (error) {
+        return "worklet-error:" + error.message;
+      } finally {
+        void context.close();
+        URL.revokeObjectURL(moduleUrl);
+      }
+    });
+    assertEqual(
+      result,
+      "worklet-ready",
+      "an AudioWorklet module loads while its Page is under Agent control"
+    );
+    await page.close();
+  `;
+}
