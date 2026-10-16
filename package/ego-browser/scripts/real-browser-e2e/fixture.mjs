@@ -455,6 +455,24 @@ export async function startFixtureServer(taskName) {
         </html>`);
       return;
     }
+    if (url.pathname === "/service-worker/sw.js") {
+      res.writeHead(200, {
+        "content-type": "text/javascript",
+        "cache-control": "no-store",
+      });
+      res.end(`
+        self.addEventListener("install", () => self.skipWaiting());
+        self.addEventListener("activate", (event) =>
+          event.waitUntil(self.clients.claim())
+        );
+        self.addEventListener("fetch", (event) => {
+          if (new URL(event.request.url).pathname === "/service-worker/ping") {
+            event.respondWith(new Response("service-worker-pong"));
+          }
+        });
+      `);
+      return;
+    }
     if (url.pathname === "/favicon.ico") {
       res.writeHead(204);
       res.end();

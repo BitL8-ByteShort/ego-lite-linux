@@ -243,11 +243,7 @@ test("browser runtime continuously enables Page and Network events", async () =>
       autoAttach: true,
       waitForDebuggerOnStart: true,
       flatten: true,
-      filter: [
-        { type: "iframe", exclude: false },
-        { type: "worker", exclude: false },
-        { exclude: true },
-      ],
+      filter: [{}],
     });
 
     runtime.emit("Page.javascriptDialogOpening", {
