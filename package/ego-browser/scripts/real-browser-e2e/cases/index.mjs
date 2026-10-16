@@ -48,6 +48,7 @@ import {
 } from "./page-download.mjs";
 import { pageOopifActionCase, pageOopifRestoreCase } from "./page-oopif.mjs";
 import { pageLoadStatesCase } from "./page-load-states.mjs";
+import { pageAutomationHooksCase } from "./page-automation-hooks.mjs";
 import {
   pageAudioWorkletCase,
   pageDedicatedWorkerCase,
@@ -187,6 +188,7 @@ export const e2eCases = [
   { name: "Page OOPIF actions", body: pageOopifActionCase },
   { name: "Page OOPIF restore and close", body: pageOopifRestoreCase },
   { name: "Page load states", body: pageLoadStatesCase },
+  { name: "Page automation hooks", body: pageAutomationHooksCase },
   { name: "Page dedicated Worker startup", body: pageDedicatedWorkerCase },
   { name: "Page AudioWorklet startup", body: pageAudioWorkletCase },
   { name: "Page SharedWorker startup", body: pageSharedWorkerCase },
