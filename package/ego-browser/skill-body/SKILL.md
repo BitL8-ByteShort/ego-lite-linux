@@ -1,6 +1,6 @@
 ---
-version: "2.1.0"
-date: "2026-10-08"
+version: "2.2.0"
+date: "2026-10-16"
 ---
 
 # ego-browser
@@ -8,14 +8,20 @@ date: "2026-10-08"
 Call `help()` or `help("page.click")` to print signatures and uncommon options
 of APIs named below; it prints by itself, so do not wrap it in `console.log`.
 For installation or connection problems, read `references/install.md` in the
-ego-browser Skill directory.
+ego-browser Skill directory and follow its link for your operating system.
 
 ## Run browser scripts
 
-Pass the script to `ego-browser nodejs`. The form depends on the shell that runs
-the command: heredoc is Bash/Zsh syntax and does not exist in PowerShell or cmd.
+Pass the script to `ego-browser nodejs`.
+
+<!-- platform: windows -->
+
+The form depends on the shell that runs the command: heredoc is Bash/Zsh
+syntax and does not exist in PowerShell or cmd.
 
 ### Bash, Zsh, Git Bash
+
+<!-- /platform -->
 
 ```bash
 ego-browser nodejs <<'EOF'
@@ -39,6 +45,8 @@ await task.page("p1").goto("https://example.com");
 console.log(task.spaceId);
 '
 ```
+
+<!-- platform: windows -->
 
 ### PowerShell
 
@@ -87,6 +95,8 @@ modules` almost always means the shell damaged the script before Node received
 it; top-level `await` itself is supported. Do not wrap the code in an async
 IIFE, open a new task space, or resend the same command. Switch to the `.mjs`
 file form above.
+
+<!-- /platform -->
 
 The script always runs in Node.js, not in the web Page. Browser helpers and
 Node.js APIs belong in the script; Page globals such as `window`, `document`,
@@ -336,10 +346,15 @@ console.log({ screenshot: path });
 ```
 
 `path` must be absolute; relative paths are rejected. Omit `path` to write
-into the system temporary directory and use the returned file path. On
-Windows, write paths with forward slashes, such as
+into the system temporary directory and use the returned file path.
+
+<!-- platform: windows -->
+
+On Windows, write paths with forward slashes, such as
 `C:/Users/<name>/ego-shots/before.png`, because backslashes are escape
 characters inside JavaScript strings.
+
+<!-- /platform -->
 
 Inspect the screenshot with an image-viewing tool. Coordinates use CSS pixels;
 keyboard names and `+`-separated chords follow Playwright syntax. Use

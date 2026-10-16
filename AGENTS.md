@@ -41,9 +41,9 @@ Task spaces are isolated browsing contexts with an ownership model (`agent` / `u
 
 - `package/ego-browser/src/` — runtime, helpers, resolver, drivers, learning subsystem.
 - `package/ego-browser/src/**/*.test.mjs` — tests are colocated with the code (there is no separate `test/` directory).
-- `package/ego-browser/scripts/` — `build.mjs` (esbuild per-file → `dist/src`, rollup bundle → `dist/out/index.js`, renders `skill-body/SKILL.md` → `dist/out/ego-browser/SKILL.md` with version and end markers, copies the entry Skill and its learnings → `dist/out/agent-skills/ego-browser`), `validate-site-skills.ts`, and the real-browser E2E runner.
+- `package/ego-browser/scripts/` — `build.mjs` (esbuild per-file → `dist/src`, rollup bundle → `dist/out/index.js`, renders `skill-body/SKILL.md` via `render-guide.mjs` → `dist/out/ego-browser/SKILL.md` plus `SKILL.macos.md` / `SKILL.windows.md`, selecting `<!-- platform: ... -->` blocks and adding version and end markers, copies the entry Skill and its learnings → `dist/out/agent-skills/ego-browser`), `validate-site-skills.ts`, and the real-browser E2E runner.
 - `package/ego-browser/skill-body/SKILL.md` — canonical agent-facing usage guide, printed by `ego-browser skill`.
-- `skills/ego-browser/` — thin entry Skill published to skill markets and plugins: `SKILL.md`, `references/install.md`, `references/clearing-state.md`, `scripts/install.sh`, and the site `learnings/`. See `docs/ego-browser-skill-command.md` for the browser-side contract.
+- `skills/ego-browser/` — thin entry Skill published to skill markets and plugins: `SKILL.md`, `references/install.md` (plus `install-macos.md` / `install-windows.md`), `references/clearing-state.md`, `scripts/install.sh`, and the site `learnings/`. See `docs/ego-browser-skill-command.md` for the browser-side contract.
 - `skills/ego-browser/learnings/` — reusable per-site experience packs (`manifest.json` + `notes/` + `tools/` + `browser-tools/`).
 
 ## Development Commands
