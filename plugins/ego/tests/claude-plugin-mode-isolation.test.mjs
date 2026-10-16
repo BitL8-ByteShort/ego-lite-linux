@@ -11,6 +11,8 @@ const claudeManifestPath = `${claudePluginRoot}/.claude-plugin/plugin.json`;
 const claudeSkillPath = `${claudePluginRoot}/skills/ego-browser/SKILL.md`;
 const claudeSkillSupportPaths = [
   `${claudePluginRoot}/skills/ego-browser/references/install.md`,
+  `${claudePluginRoot}/skills/ego-browser/references/install-macos.md`,
+  `${claudePluginRoot}/skills/ego-browser/references/install-windows.md`,
   `${claudePluginRoot}/skills/ego-browser/references/clearing-state.md`,
   `${claudePluginRoot}/skills/ego-browser/scripts/install.sh`,
 ];
