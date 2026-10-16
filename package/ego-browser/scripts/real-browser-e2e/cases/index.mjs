@@ -51,6 +51,8 @@ import { pageLoadStatesCase } from "./page-load-states.mjs";
 import {
   pageAudioWorkletCase,
   pageDedicatedWorkerCase,
+  pageServiceWorkerCase,
+  pageSharedWorkerCase,
 } from "./page-workers.mjs";
 import { pageApiAlignmentCase } from "./page-api-alignment.mjs";
 import { pageActionabilityCase } from "./page-actionability.mjs";
@@ -187,6 +189,8 @@ export const e2eCases = [
   { name: "Page load states", body: pageLoadStatesCase },
   { name: "Page dedicated Worker startup", body: pageDedicatedWorkerCase },
   { name: "Page AudioWorklet startup", body: pageAudioWorkletCase },
+  { name: "Page SharedWorker startup", body: pageSharedWorkerCase },
+  { name: "Page Service Worker startup", body: pageServiceWorkerCase },
   { name: "Page API alignment", body: pageApiAlignmentCase },
   { name: "Page actionability", body: pageActionabilityCase },
   {
