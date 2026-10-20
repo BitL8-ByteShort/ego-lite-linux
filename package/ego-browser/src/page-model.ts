@@ -394,6 +394,8 @@ type PageModelServices = {
     options: { timeoutMs: number },
   ): DownloadInterception;
   now(): number;
+  /** Absolute `now()` time at which the running element action gives up. */
+  actionDeadline?: number;
   sleep(ms: number): Promise<void>;
   platform: string;
   pageBudget: number;
@@ -2638,11 +2640,18 @@ class Page {
     return { refMap, iframeSessions };
   }
 
-  /** Services whose CDP transport reports the first `Input.*` command. */
-  #inputTrackingServices(onInput: () => void): PageModelServices {
+  /**
+   * Services whose CDP transport reports the first `Input.*` command and
+   * which carry the action deadline into the driver's scroll loops.
+   */
+  #inputTrackingServices(
+    deadline: number,
+    onInput: () => void,
+  ): PageModelServices {
     const services = this.#services;
     return {
       ...services,
+      actionDeadline: deadline,
       cdp(method, params, sessionId, timeoutMs) {
         if (method.startsWith("Input.")) onInput();
         return services.cdp(method, params, sessionId, timeoutMs);
@@ -2667,11 +2676,12 @@ class Page {
       services: PageModelServices,
     ) => Promise<Result>,
   ): Promise<Result> {
-    const deadline = this.#services.now() + timeoutMs;
+    const startedAt = this.#services.now();
+    const deadline = startedAt + timeoutMs;
     let lastBlocker: Error | undefined;
     while (true) {
       let inputDispatched = false;
-      const services = this.#inputTrackingServices(() => {
+      const services = this.#inputTrackingServices(deadline, () => {
         inputDispatched = true;
       });
       try {
@@ -2692,8 +2702,11 @@ class Page {
         if (!retryable && !exhausted) throw error;
         if (remainingMs <= 0) {
           const blocker = exhausted && lastBlocker ? lastBlocker : error;
+          // Report the time the action really took: a slow page can overrun
+          // the configured timeout, and the configured value is the caller's.
+          const elapsedMs = this.#services.now() - startedAt;
           throw new ElementResolutionError(
-            `${actionName} timed out after ${timeoutMs}ms: ${blocker.message}`,
+            `${actionName} timed out after ${elapsedMs}ms: ${blocker.message}`,
             "transient",
           );
         }

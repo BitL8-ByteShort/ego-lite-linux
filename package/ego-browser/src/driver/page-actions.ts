@@ -23,6 +23,9 @@ type PageActionServices = {
   showAgentTaskState(state: string): Promise<void>;
   sleep(ms: number): Promise<void>;
   platform?: string;
+  now?(): number;
+  /** Absolute `now()` time at which the current action gives up. */
+  actionDeadline?: number;
 };
 
 export type MouseButton = "left" | "middle" | "right";
@@ -1426,39 +1429,24 @@ async function resolveElementPoint(
       iframeSessions,
     );
   }
-  for (let attempt = 0; attempt <= AUTO_SCROLL_ATTEMPTS; attempt += 1) {
-    const response = await services.cdp(
-      "Runtime.callFunctionOn",
-      {
-        functionDeclaration: expression,
-        objectId,
-        arguments: position ? [{ value: position }] : [],
-        returnByValue: true,
-        awaitPromise: true,
-      },
-      sessionId,
-    );
-    const point = runtimeValue(response, expression);
-    if (typeof point?.error === "string") {
-      throw new ElementResolutionError(
-        `${actionName} failed: ${point.error}`,
-        "transient",
+  const point = await bringIntoView(services, sessionId, objectId, {
+    actionName,
+    subject: "element",
+    evaluate: async () => {
+      const response = await services.cdp(
+        "Runtime.callFunctionOn",
+        {
+          functionDeclaration: expression,
+          objectId,
+          arguments: position ? [{ value: position }] : [],
+          returnByValue: true,
+          awaitPromise: true,
+        },
+        sessionId,
       );
-    }
-    const scroll = point?.scroll;
-    if (scroll) {
-      if (
-        attempt === AUTO_SCROLL_ATTEMPTS ||
-        !Number.isFinite(scroll.x) ||
-        !Number.isFinite(scroll.y) ||
-        !Number.isFinite(scroll.deltaX) ||
-        !Number.isFinite(scroll.deltaY)
-      ) {
-        throw new ElementResolutionError(
-          `${actionName} failed: element is not visible in the viewport`,
-          "transient",
-        );
-      }
+      return runtimeValue(response, expression);
+    },
+    wheel: async (scroll) => {
       const pageScrollPoint = await pagePointForFrame(
         services,
         sessionId,
@@ -1466,36 +1454,130 @@ async function resolveElementPoint(
         scroll,
         pageSessionId,
       );
-      await dispatchWheelMotion(
-        {
-          dispatch: (params) => dispatchMouseEvent(services, sessionId, params),
-          sleep: services.sleep,
-        },
-        {
-          x: pageScrollPoint.x,
-          y: pageScrollPoint.y,
-          deltaX: scroll.deltaX,
-          deltaY: scroll.deltaY,
-        },
+      return dispatchWheelMotion(wheelMotionServices(services, sessionId), {
+        x: pageScrollPoint.x,
+        y: pageScrollPoint.y,
+        deltaX: scroll.deltaX,
+        deltaY: scroll.deltaY,
+      });
+    },
+  });
+  if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
+    throw new Error(`${actionName} could not resolve the element position`);
+  }
+  const pagePoint = await pagePointForFrame(
+    services,
+    sessionId,
+    frameId,
+    point,
+    pageSessionId,
+  );
+  return { ...pagePoint, local: point };
+}
+
+type WheelRequest = { x: number; y: number; deltaX: number; deltaY: number };
+
+function wheelMotionServices(services: PageActionServices, sessionId: string) {
+  return {
+    dispatch: (params: Record<string, unknown>) =>
+      dispatchMouseEvent(services, sessionId, params),
+    sleep: services.sleep,
+    exhausted: () => actionDeadlinePassed(services),
+  };
+}
+
+function actionDeadlinePassed(services: PageActionServices): boolean {
+  return (
+    services.actionDeadline !== undefined &&
+    services.now !== undefined &&
+    services.now() >= services.actionDeadline
+  );
+}
+
+function sameWheelRequest(a: WheelRequest, b: WheelRequest): boolean {
+  return (
+    Math.abs(a.x - b.x) < 1 &&
+    Math.abs(a.y - b.y) < 1 &&
+    Math.abs(a.deltaX - b.deltaX) < 1 &&
+    Math.abs(a.deltaY - b.deltaY) < 1
+  );
+}
+
+/**
+ * Re-evaluate a target until it reports a position instead of a scroll
+ * request, scrolling with browser wheel input in between.
+ *
+ * Wheel input is the primary path because it is trusted input that reaches
+ * the nearest scrollable container like a user's wheel would. It can fail
+ * silently: the wheel point may land on an element that calls
+ * `preventDefault()` on wheel events (maps, carousels, canvas editors), or
+ * the page may be at the end of its scroll range. When a motion leaves the
+ * target exactly where it was, the next request is identical, and the loop
+ * falls back once to `DOM.scrollIntoViewIfNeeded` (which bypasses a site's
+ * patched `Element.prototype.scrollIntoView`) instead of repeating a motion
+ * that already proved ineffective. The action deadline is checked before
+ * every motion and inside it so a slow wheel handler cannot run the action
+ * far past its timeout.
+ */
+async function bringIntoView<
+  T extends { error?: unknown; scroll?: WheelRequest | null },
+>(
+  services: PageActionServices,
+  sessionId: string,
+  objectId: string,
+  input: {
+    actionName: string;
+    subject: "element" | "iframe";
+    evaluate: () => Promise<T>;
+    wheel: (scroll: WheelRequest) => Promise<boolean>;
+  },
+): Promise<T> {
+  const notVisible = () =>
+    new ElementResolutionError(
+      `${input.actionName} failed: ${input.subject} is not visible in the viewport`,
+      "transient",
+    );
+  let previous: WheelRequest | undefined;
+  let fellBack = false;
+  for (let attempt = 0; attempt <= AUTO_SCROLL_ATTEMPTS; attempt += 1) {
+    const result = await input.evaluate();
+    if (typeof result?.error === "string") {
+      throw new ElementResolutionError(
+        `${input.actionName} failed: ${result.error}`,
+        "transient",
       );
+    }
+    const scroll = result?.scroll;
+    if (!scroll) return result;
+    if (
+      attempt === AUTO_SCROLL_ATTEMPTS ||
+      !Number.isFinite(scroll.x) ||
+      !Number.isFinite(scroll.y) ||
+      !Number.isFinite(scroll.deltaX) ||
+      !Number.isFinite(scroll.deltaY) ||
+      actionDeadlinePassed(services)
+    ) {
+      throw notVisible();
+    }
+    if (previous && sameWheelRequest(previous, scroll)) {
+      if (fellBack) throw notVisible();
+      fellBack = true;
+      previous = undefined;
+      try {
+        await services.cdp(
+          "DOM.scrollIntoViewIfNeeded",
+          { objectId },
+          sessionId,
+        );
+      } catch {
+        throw notVisible();
+      }
       continue;
     }
-    if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) {
-      throw new Error(`${actionName} could not resolve the element position`);
-    }
-    const pagePoint = await pagePointForFrame(
-      services,
-      sessionId,
-      frameId,
-      point,
-      pageSessionId,
-    );
-    return { ...pagePoint, local: point };
+    previous = scroll;
+    if (!(await input.wheel(scroll))) throw notVisible();
   }
-  throw new ElementResolutionError(
-    `${actionName} failed: element is not visible in the viewport`,
-    "transient",
-  );
+  throw notVisible();
 }
 
 async function ensureFrameOwnerInView(
@@ -1563,47 +1645,28 @@ async function ensureFrameOwnerInView(
     return { scroll: scrollRequestForPoint(this, point) };
   }`;
   try {
-    for (let attempt = 0; attempt <= AUTO_SCROLL_ATTEMPTS; attempt += 1) {
-      const response = await services.cdp(
-        "Runtime.callFunctionOn",
-        {
-          functionDeclaration: source,
-          objectId,
-          returnByValue: true,
-          awaitPromise: false,
-        },
-        ownerSessionId,
-      );
-      const result = runtimeValue(response, source);
-      if (typeof result?.error === "string") {
-        throw new ElementResolutionError(
-          `${actionName} failed: ${result.error}`,
-          "transient",
+    await bringIntoView(services, ownerSessionId, objectId, {
+      actionName,
+      subject: "iframe",
+      evaluate: async () => {
+        const response = await services.cdp(
+          "Runtime.callFunctionOn",
+          {
+            functionDeclaration: source,
+            objectId,
+            returnByValue: true,
+            awaitPromise: false,
+          },
+          ownerSessionId,
         );
-      }
-      const scroll = result?.scroll;
-      if (!scroll) return;
-      if (
-        attempt === AUTO_SCROLL_ATTEMPTS ||
-        !Number.isFinite(scroll.x) ||
-        !Number.isFinite(scroll.y) ||
-        !Number.isFinite(scroll.deltaX) ||
-        !Number.isFinite(scroll.deltaY)
-      ) {
-        throw new ElementResolutionError(
-          `${actionName} failed: iframe is not visible in the viewport`,
-          "transient",
-        );
-      }
-      await dispatchWheelMotion(
-        {
-          dispatch: (params) =>
-            dispatchMouseEvent(services, ownerSessionId, params),
-          sleep: services.sleep,
-        },
-        scroll,
-      );
-    }
+        return runtimeValue(response, source);
+      },
+      wheel: (scroll) =>
+        dispatchWheelMotion(
+          wheelMotionServices(services, ownerSessionId),
+          scroll,
+        ),
+    });
   } finally {
     await releaseObject(services, ownerSessionId, objectId);
   }

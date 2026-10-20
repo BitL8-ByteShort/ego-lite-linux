@@ -20,6 +20,7 @@ import {
 } from "./page-default-screenshot-path.mjs";
 import { pageSnapshotLocatorCase } from "./page-snapshot-locators.mjs";
 import { pageSnapshotViewportOverflowCase } from "./page-snapshot-viewport-overflow.mjs";
+import { pageWheelTrapCase } from "./page-wheel-trap.mjs";
 import {
   pageSnapshotIframeViewportCase,
   pageSnapshotLazyIframeCase,
@@ -147,6 +148,7 @@ export const e2eCases = [
     body: pageSnapshotIframeViewportCase,
   },
   { name: "Page snapshot subtree", body: pageSnapshotSubtreeCase },
+  { name: "Page auto-scroll past a wheel trap", body: pageWheelTrapCase },
   {
     name: "Page snapshot viewport overflow hint",
     body: pageSnapshotViewportOverflowCase,

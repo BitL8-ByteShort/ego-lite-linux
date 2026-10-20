@@ -316,8 +316,9 @@ interactive ancestor or unique editable descendant; `fill()` and
 `setInputFiles()` only continue to a unique compatible control.
 
 `click()`, `fill()`, `hover()`, and `dragAndDrop()` automatically bring their
-target into view with browser wheel input. Do not pre-scroll solely to make a
-DOM target actionable.
+target into view with browser wheel input, falling back to a programmatic
+scroll when the wheel does not move the target. Do not pre-scroll solely to
+make a DOM target actionable.
 
 Snapshot node names are accessibility roles. Use a ref now or `loc=...` to find
 the element again. After the page changes, take a new snapshot. When a useful
