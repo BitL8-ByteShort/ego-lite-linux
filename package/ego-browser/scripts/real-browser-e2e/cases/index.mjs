@@ -14,6 +14,10 @@ import { pageDragAndDrawCase } from "./page-drag-and-draw.mjs";
 import { pageJavaScriptDialogHandlingCase } from "./page-dialogs.mjs";
 import { pageMediaPlaybackCase } from "./page-media-playback.mjs";
 import { pageScrolledScreenshotCase } from "./page-screenshot.mjs";
+import {
+  pageDefaultScreenshotPathFirstRunCase,
+  pageDefaultScreenshotPathSecondRunCase,
+} from "./page-default-screenshot-path.mjs";
 import { pageSnapshotLocatorCase } from "./page-snapshot-locators.mjs";
 import {
   pageSnapshotIframeViewportCase,
@@ -128,6 +132,14 @@ export const e2eCases = [
   },
   { name: "Page media playback", body: pageMediaPlaybackCase },
   { name: "Page scrolled screenshot", body: pageScrolledScreenshotCase },
+  {
+    name: "Page default screenshot path: first run",
+    body: pageDefaultScreenshotPathFirstRunCase,
+  },
+  {
+    name: "Page default screenshot path: second run",
+    body: pageDefaultScreenshotPathSecondRunCase,
+  },
   { name: "Page snapshot locator quality", body: pageSnapshotLocatorCase },
   {
     name: "Page snapshot iframe viewport",
