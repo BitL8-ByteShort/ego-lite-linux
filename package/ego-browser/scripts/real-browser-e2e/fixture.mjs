@@ -381,6 +381,40 @@ export async function startFixtureServer(taskName) {
         </html>`);
       return;
     }
+    if (url.pathname === "/wheel-trap") {
+      // Mirrors the CITRO-4275 repro: a block that swallows wheel events covers
+      // the bottom of the viewport, and the input sits below it. With
+      // ?slow=<ms> every wheel event also blocks the main thread for that long.
+      const trap = url.searchParams.get("trap") === "1";
+      const slowMs = Number(url.searchParams.get("slow") || 0);
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end(`<!doctype html>
+        <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <title>wheel trap</title>
+          </head>
+          <body style="margin:0">
+            <div style="height:500px">top</div>
+            <div id="trap" style="height:800px;background:#ddd">wheel trap</div>
+            <input id="target" style="display:block;margin:200px 0 600px">
+            <script>
+              window.__wheelEvents = 0;
+              addEventListener("wheel", () => { window.__wheelEvents += 1; }, { capture: true });
+              const trap = ${trap};
+              const slowMs = ${slowMs};
+              if (trap || slowMs > 0) {
+                document.getElementById("trap").addEventListener("wheel", (event) => {
+                  if (trap) event.preventDefault();
+                  const until = performance.now() + slowMs;
+                  while (performance.now() < until) {}
+                }, { passive: false });
+              }
+            </script>
+          </body>
+        </html>`);
+      return;
+    }
     if (url.pathname === "/nav-target") {
       res.writeHead(200, { "content-type": "text/html" });
       res.end(pageHtml("nav-target"));

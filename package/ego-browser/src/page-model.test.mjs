@@ -53,6 +53,8 @@ function createFixture(rootDir) {
   let rejectedClickPointsRemaining = 0;
   let interceptedClickPointsRemaining = 0;
   let scrollClickPointsRemaining = 0;
+  let trapClickPoints = false;
+  let wheelDispatchDurationMs = 0;
   let fillElementKind = "input";
   let fillText = "";
   let fillTransform = null;
@@ -505,6 +507,19 @@ function createFixture(rootDir) {
           };
         }
         if (params.functionDeclaration.includes("getBoundingClientRect")) {
+          if (trapClickPoints) {
+            // The wheel point sits on an element that swallows wheel events:
+            // the target never moves, so every evaluation asks for the same
+            // scroll until a programmatic scroll finally brings it in.
+            return {
+              result: {
+                type: "object",
+                value: {
+                  scroll: { x: 80, y: 599, deltaX: 0, deltaY: 900 },
+                },
+              },
+            };
+          }
           if (scrollClickPointsRemaining > 0) {
             scrollClickPointsRemaining -= 1;
             return {
@@ -620,7 +635,12 @@ function createFixture(rootDir) {
       if (method === "Browser.getVersion") {
         return { product: "Ego Lite/Test" };
       }
+      if (method === "DOM.scrollIntoViewIfNeeded") {
+        trapClickPoints = false;
+        return {};
+      }
       if (method === "Input.dispatchMouseEvent") {
+        if (params.type === "mouseWheel") nowMs += wheelDispatchDurationMs;
         if (timeoutNextMouseDispatch) {
           timeoutNextMouseDispatch = false;
           throw new Error("CDP request timed out: Input.dispatchMouseEvent");
@@ -862,6 +882,12 @@ function createFixture(rootDir) {
     },
     scrollNextClickPoint(count = 1) {
       scrollClickPointsRemaining = count;
+    },
+    trapClickPoints() {
+      trapClickPoints = true;
+    },
+    setWheelDispatchDuration(ms) {
+      wheelDispatchDurationMs = ms;
     },
     navigateOnNextClick(url) {
       navigateOnNextClickUrl = url;
@@ -5798,6 +5824,137 @@ test("Page fill uses the wheel motion engine to bring an element into view", asy
     assert(
       wheelEnd < insertText,
       "scrolling must finish before text input is dispatched",
+    );
+  });
+});
+
+test("Page fill falls back to a programmatic scroll when wheel input does not move the target", async () => {
+  await withFixture(async (fixture) => {
+    const task = taskForRound(fixture, "round-a");
+    const page = await openTestPage(task, "https://example.test/map");
+    fixture.trapClickPoints();
+
+    await page.fill("#below-the-map", "hello");
+
+    const wheelCalls = fixture.calls.filter(
+      ([kind, method, params]) =>
+        kind === "cdp" &&
+        method === "Input.dispatchMouseEvent" &&
+        params.type === "mouseWheel",
+    );
+    assert(wheelCalls.length > 1, "wheel input is still tried first");
+    assert(
+      wheelCalls.length <= 12,
+      `one ineffective motion must not be repeated: ${wheelCalls.length} wheel events`,
+    );
+    const fallbackIndex = fixture.calls.findIndex(
+      ([kind, method, params, session]) =>
+        kind === "cdp" &&
+        method === "DOM.scrollIntoViewIfNeeded" &&
+        params.objectId === `element:${page.targetId}` &&
+        session === `session:${page.targetId}`,
+    );
+    assert(
+      fallbackIndex > 0,
+      "a stalled motion falls back to DOM.scrollIntoViewIfNeeded",
+    );
+    assert(
+      fallbackIndex > fixture.calls.lastIndexOf(wheelCalls.at(-1)),
+      "the fallback runs after the wheel motion proved ineffective",
+    );
+    assert(
+      fixture.calls.findIndex(
+        ([kind, method]) => kind === "cdp" && method === "Input.insertText",
+      ) > fallbackIndex,
+      "text input waits for the fallback scroll",
+    );
+  });
+});
+
+test("Page click gives up when neither wheel input nor the fallback scroll moves the target", async () => {
+  await withFixture(async (fixture) => {
+    const task = taskForRound(fixture, "round-a");
+    const page = await openTestPage(task, "https://example.test/map");
+    fixture.trapClickPoints();
+    const task2 = taskForRound(fixture, "round-a", {
+      async cdp(method, params, sessionId, timeoutMs) {
+        const result = await fixture.services.cdp(
+          method,
+          params,
+          sessionId,
+          timeoutMs,
+        );
+        // The programmatic scroll is accepted but changes nothing either.
+        if (method === "DOM.scrollIntoViewIfNeeded") fixture.trapClickPoints();
+        return result;
+      },
+    });
+    const stuck = task2.page(page.label);
+
+    await assert.rejects(
+      () => stuck.click("#below-the-map", { timeout: 1_000 }),
+      /page\.click timed out after \d+ms: page\.click failed: element is not visible in the viewport/,
+    );
+    // A motion is a run of consecutive wheel events.
+    let wheelMotions = 0;
+    let inMotion = false;
+    for (const [kind, method, params] of fixture.calls) {
+      const wheel =
+        kind === "cdp" &&
+        method === "Input.dispatchMouseEvent" &&
+        params.type === "mouseWheel";
+      if (wheel && !inMotion) wheelMotions += 1;
+      inMotion = wheel;
+    }
+    const fallbacks = fixture.calls.filter(
+      ([kind, method]) =>
+        kind === "cdp" && method === "DOM.scrollIntoViewIfNeeded",
+    ).length;
+    assert(fallbacks >= 1, "the fallback scroll was attempted");
+    assert(
+      wheelMotions <= fallbacks * 2,
+      `each retry tries at most one wheel motion before and after the fallback: ${wheelMotions} motions, ${fallbacks} fallbacks`,
+    );
+  });
+});
+
+test("Page fill stops auto-scrolling at the action deadline and reports the real duration", async () => {
+  await withFixture(async (fixture) => {
+    const task = taskForRound(fixture, "round-a");
+    const page = await openTestPage(task, "https://example.test/map");
+    fixture.trapClickPoints();
+    // A map that zooms on every wheel event keeps the renderer busy, so each
+    // dispatched wheel event takes about two seconds to be acknowledged.
+    fixture.setWheelDispatchDuration(2_000);
+    const startedAt = fixture.services.now();
+
+    await assert.rejects(
+      () => page.fill("#below-the-map", "hello", { timeout: 3_000 }),
+      (error) => {
+        const elapsed = fixture.services.now() - startedAt;
+        const reported = Number(
+          /page\.fill timed out after (\d+)ms: /.exec(error.message)?.[1],
+        );
+        assert(
+          reported > 3_000 && reported <= elapsed,
+          `the timeout message reports the real duration, not the configured 3000ms: ${error.message} (elapsed ${elapsed}ms)`,
+        );
+        assert(
+          elapsed < 6_000,
+          `the action overran its 3000ms budget by ${elapsed - 3_000}ms`,
+        );
+        return true;
+      },
+    );
+    const wheelCalls = fixture.calls.filter(
+      ([kind, method, params]) =>
+        kind === "cdp" &&
+        method === "Input.dispatchMouseEvent" &&
+        params.type === "mouseWheel",
+    );
+    assert(
+      wheelCalls.length <= 3,
+      `the motion stops at the deadline instead of finishing: ${wheelCalls.length} wheel events`,
     );
   });
 });
