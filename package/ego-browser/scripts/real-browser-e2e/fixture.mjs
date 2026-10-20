@@ -349,6 +349,38 @@ export async function startFixtureServer(taskName) {
         </html>`);
       return;
     }
+    if (url.pathname === "/snapshot-viewport-overflow") {
+      // Mirrors the CITRO-4285 repro: the button sits at the bottom edge of the
+      // viewport, so the result it reveals lands just below the fold.
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end(`<!doctype html>
+        <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <title>snapshot viewport overflow</title>
+            <style>
+              body { margin: 0; font: 16px sans-serif; }
+              #spacer { height: calc(100vh - 40px); background: #eef; }
+              #out { margin-top: 60px; }
+            </style>
+          </head>
+          <body>
+            <div id="spacer">Spacer</div>
+            <button id="go">Submit</button>
+            <div id="out"></div>
+            <script>
+              document.getElementById("go").addEventListener("click", () => {
+                const out = document.getElementById("out");
+                out.innerHTML = '<p role="status">Checking…</p>';
+                setTimeout(() => {
+                  out.innerHTML = '<div role="status">RESULT-OK ticket T-1234</div>';
+                }, 300);
+              });
+            </script>
+          </body>
+        </html>`);
+      return;
+    }
     if (url.pathname === "/nav-target") {
       res.writeHead(200, { "content-type": "text/html" });
       res.end(pageHtml("nav-target"));

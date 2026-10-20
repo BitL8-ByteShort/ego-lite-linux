@@ -251,7 +251,13 @@ Wait for the expected result: use `waitForURL()` for navigation,
 state. Avoid fixed delays when an observable condition exists. A snapshot
 captures the current moment; it does not wait for the page to become stable.
 `page.snapshot()` captures the current viewport. For content outside it, use
-`page.snapshot({ scope: "full_page" })`.
+`page.snapshot({ scope: "full_page" })`. When the document scrolls past the
+viewport, a viewport snapshot ends with a line such as
+`[more content below the viewport: scrollY=0, viewport 778 / page 880 px; ...]`;
+nodes outside the viewport are omitted, not missing from the page. When the
+expected result may appear below the fold (for example after clicking a button
+near the bottom edge), scroll first or snapshot with `full_page` before
+concluding that the result did not appear.
 
 The default viewport snapshot includes visible iframe content returned by the
 browser. To focus on a frame's subtree, reuse the ref printed on its `iframe`
