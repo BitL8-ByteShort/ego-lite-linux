@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { setOverrides, state } from "./state.js";
-import { releaseAgentControlledSpace } from "./agent-control-notice.js";
 import { buildEgoError, invokeEgo, probeAgentControl } from "./ego-errors.js";
 import { help as helpRuntime, formatHelp } from "./help-runtime.js";
 import { validatePublicApiOptions } from "./public-api-schema.js";
@@ -459,7 +458,6 @@ export async function completeTaskSpace(
     }
     await invokeEgo("completeTaskSpace", () => ego.closeTaskSpace());
   }
-  releaseAgentControlledSpace(match.id);
   return { done: true };
 }
 
@@ -475,16 +473,14 @@ export async function handOffTaskSpace(nameOrId?: string | number) {
   if (!ego || typeof ego.handOffTaskSpace !== "function") {
     throw new Error("handOffTaskSpace requires ego.handOffTaskSpace");
   }
-  let match;
   if (nameOrId !== undefined) {
-    match = await findTaskSpace(nameOrId, "handOffTaskSpace");
+    const match = await findTaskSpace(nameOrId, "handOffTaskSpace");
     if (match.ownership === "user") {
       return { done: false, skipped: "user-owned" as const };
     }
     await selectTaskSpace(ego, match, "handOffTaskSpace");
   }
   await invokeEgo("handOffTaskSpace", () => ego.handOffTaskSpace());
-  if (match) releaseAgentControlledSpace(match.id);
   return { done: true };
 }
 
