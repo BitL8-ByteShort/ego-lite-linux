@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { state } from "../state.js";
@@ -94,16 +94,29 @@ export async function elementCenter(selectorOrRef) {
  * The embedded host runs every script in one long-lived Node process, giving
  * each run its own `globalThis` but sharing `process.env`, `os.tmpdir()` and
  * the pid. A host that needs per-run output sets
- * `globalThis.EGO_BROWSER_OUTPUT_DIR`; a random name keeps concurrent runs in
- * the shared default directory from overwriting each other.
+ * `globalThis.EGO_BROWSER_OUTPUT_DIR` to an absolute directory; a random name
+ * keeps concurrent runs in the shared default directory from overwriting each
+ * other.
  */
 function defaultScreenshotPath(): string {
   const outputDir = (globalThis as { EGO_BROWSER_OUTPUT_DIR?: unknown })
     .EGO_BROWSER_OUTPUT_DIR;
-  const directory =
-    typeof outputDir === "string" && outputDir.length > 0
-      ? outputDir
-      : tmpdir();
+  let directory = tmpdir();
+  if (outputDir !== undefined) {
+    // Same rule as an explicit screenshot path: the Node context does not run
+    // in the caller's working directory, so a relative directory would land
+    // somewhere unexpected (or fail with EPERM on Windows).
+    if (
+      typeof outputDir !== "string" ||
+      outputDir.length === 0 ||
+      !isAbsolute(outputDir)
+    ) {
+      throw new TypeError(
+        "globalThis.EGO_BROWSER_OUTPUT_DIR must be an absolute directory path",
+      );
+    }
+    directory = outputDir;
+  }
   return join(directory, `ego-browser-shot-${randomUUID()}.png`);
 }
 

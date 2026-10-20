@@ -287,3 +287,21 @@ test("captureScreenshot without a path falls back to tmpdir", async () => {
     restore();
   }
 });
+
+test("captureScreenshot rejects a relative EGO_BROWSER_OUTPUT_DIR", async () => {
+  const previous = globalThis.EGO_BROWSER_OUTPUT_DIR;
+  globalThis.EGO_BROWSER_OUTPUT_DIR = "shots";
+  const restore = setOverrides({ async writeFile() {} });
+  try {
+    await withCdpRuntime(async () => {
+      await assert.rejects(
+        captureScreenshot(),
+        /EGO_BROWSER_OUTPUT_DIR must be an absolute directory path/,
+      );
+    });
+  } finally {
+    restore();
+    if (previous === undefined) delete globalThis.EGO_BROWSER_OUTPUT_DIR;
+    else globalThis.EGO_BROWSER_OUTPUT_DIR = previous;
+  }
+});
