@@ -19,6 +19,7 @@ import {
   pageDefaultScreenshotPathSecondRunCase,
 } from "./page-default-screenshot-path.mjs";
 import { pageSnapshotLocatorCase } from "./page-snapshot-locators.mjs";
+import { pageSnapshotViewportOverflowCase } from "./page-snapshot-viewport-overflow.mjs";
 import {
   pageSnapshotIframeViewportCase,
   pageSnapshotLazyIframeCase,
@@ -146,6 +147,10 @@ export const e2eCases = [
     body: pageSnapshotIframeViewportCase,
   },
   { name: "Page snapshot subtree", body: pageSnapshotSubtreeCase },
+  {
+    name: "Page snapshot viewport overflow hint",
+    body: pageSnapshotViewportOverflowCase,
+  },
   {
     name: "Page ref identity across partial snapshots",
     body: pageRefIdentityCase,

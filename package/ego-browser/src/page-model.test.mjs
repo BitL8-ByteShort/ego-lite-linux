@@ -74,6 +74,7 @@ function createFixture(rootDir) {
   let timeoutNextLifecycleEvaluate = false;
   let timeoutNextUrlEvaluate = false;
   let waitFunctionResults = [];
+  let viewportMetrics = { viewportHeight: 600, scrollY: 0, pageHeight: 600 };
   let fetchFailure = null;
   let nowMs = 1_000;
   const pageEvents = new Map();
@@ -324,6 +325,9 @@ function createFixture(rootDir) {
           return {
             result: { type: "number", value: elementPresent ? 1 : 0 },
           };
+        }
+        if (params.expression.includes("viewportHeight")) {
+          return { result: { type: "object", value: viewportMetrics } };
         }
         if (params.expression.includes("innerWidth")) {
           return {
@@ -803,6 +807,9 @@ function createFixture(rootDir) {
     },
     openPopupOnNextClick(url) {
       popupOnNextClick = url;
+    },
+    setViewportMetrics(metrics) {
+      viewportMetrics = metrics;
     },
     openFileChooserOnNextClick(options = {}) {
       fileChooserOnNextClick = {
@@ -2134,6 +2141,90 @@ test("snapshot defaults to the viewport, reports its source, and validates optio
     await assert.rejects(
       () => page.snapshot({ diff: true }),
       /page\.snapshot received unknown option: diff/,
+    );
+  });
+});
+
+test("a viewport snapshot reports content outside the viewport", async () => {
+  await withFixture(async (fixture) => {
+    const task = taskForRound(fixture, "round-a");
+    const page = await openTestPage(task, "https://example.test/overflow");
+    const lastLine = (text) => text.split("\n").at(-1);
+
+    fixture.setViewportMetrics({
+      viewportHeight: 778,
+      scrollY: 0,
+      pageHeight: 880,
+    });
+    assert.equal(
+      lastLine(await page.snapshot()),
+      '[more content below the viewport: scrollY=0, viewport 778 / page 880 px; scroll or use snapshot({ scope: "full_page" })]',
+    );
+
+    fixture.setViewportMetrics({
+      viewportHeight: 778,
+      scrollY: 102,
+      pageHeight: 880,
+    });
+    assert.match(
+      lastLine(await page.snapshot()),
+      /^\[more content above the viewport: scrollY=102, viewport 778 \/ page 880 px;/,
+    );
+
+    fixture.setViewportMetrics({
+      viewportHeight: 778,
+      scrollY: 50,
+      pageHeight: 1600,
+    });
+    assert.match(
+      lastLine(await page.snapshot({ scope: "only_within_viewport" })),
+      /^\[more content above and below the viewport: scrollY=50, viewport 778 \/ page 1600 px;/,
+    );
+
+    for (const scope of ["full_page", "subtree"]) {
+      const calls = fixture.calls.length;
+      const text = await page.snapshot(
+        scope === "subtree" ? { scope, root: "@21" } : { scope },
+      );
+      assert.doesNotMatch(text, /more content/);
+      assert(
+        !fixture.calls
+          .slice(calls)
+          .some(
+            ([kind, method, params]) =>
+              kind === "cdp" &&
+              method === "Runtime.evaluate" &&
+              params.expression.includes("viewportHeight"),
+          ),
+        `${scope} snapshot must not read viewport metrics`,
+      );
+    }
+  });
+});
+
+test("a viewport snapshot stays silent when the document fits the viewport", async () => {
+  await withFixture(async (fixture) => {
+    const task = taskForRound(fixture, "round-a");
+    const page = await openTestPage(task, "https://example.test/fits");
+
+    for (const metrics of [
+      { viewportHeight: 600, scrollY: 0, pageHeight: 600 },
+      { viewportHeight: 600, scrollY: 0, pageHeight: 400 },
+      { viewportHeight: 600, scrollY: 0.5, pageHeight: 600.75 },
+    ]) {
+      fixture.setViewportMetrics(metrics);
+      assert.equal(
+        (await page.snapshot()).split("\n").at(-1),
+        "snapshot:https://example.test/fits",
+        `no hint for ${JSON.stringify(metrics)}`,
+      );
+    }
+
+    fixture.setViewportMetrics("complete");
+    assert.equal(
+      (await page.snapshot()).split("\n").at(-1),
+      "snapshot:https://example.test/fits",
+      "an unreadable metrics result degrades to no hint",
     );
   });
 });

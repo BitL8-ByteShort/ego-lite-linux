@@ -1762,8 +1762,41 @@ class Page {
       );
       const content = result?.content || "";
       const header = await this.#snapshotHeader(page);
-      return `${header}\n${content}`;
+      const overflow =
+        snapshotScope === "only_within_viewport"
+          ? await this.#viewportOverflowHint(sessionId)
+          : "";
+      if (!overflow) return `${header}\n${content}`;
+      // The native content ends with a newline; keep the hint directly below
+      // the last node instead of after a blank line.
+      return `${header}\n${content.replace(/\n+$/, "")}\n${overflow}`;
     });
+  }
+
+  /**
+   * One trailing line for a viewport snapshot when the document scrolls past
+   * the viewport. The native viewport snapshot silently omits offscreen nodes,
+   * so without this line an agent cannot tell "no result yet" from "the result
+   * is below the fold". Any failure to read the metrics (pending dialog, lost
+   * frame, slow page) degrades to no hint rather than a failed snapshot.
+   */
+  async #viewportOverflowHint(sessionId: string): Promise<string> {
+    if (this.#services.pendingDialog(sessionId)) return "";
+    let metrics: ViewportMetrics | undefined;
+    try {
+      metrics = await evaluateInSession<ViewportMetrics>(
+        this.#services,
+        sessionId,
+        VIEWPORT_METRICS_EXPRESSION,
+        false,
+        undefined,
+        VIEWPORT_METRICS_TIMEOUT_MS,
+        VIEWPORT_METRICS_TIMEOUT_MS,
+      );
+    } catch {
+      return "";
+    }
+    return viewportOverflowHint(metrics);
   }
 
   async url(): Promise<string> {
@@ -2982,6 +3015,47 @@ class Page {
     await this.#services.cdp("Target.activateTarget", { targetId });
     this.#services.setPreferredTarget(targetId);
   }
+}
+
+type ViewportMetrics = {
+  viewportHeight: number;
+  scrollY: number;
+  pageHeight: number;
+};
+
+const VIEWPORT_METRICS_TIMEOUT_MS = 2_000;
+
+// Keep the field names distinct from page.info() so test doubles and log
+// readers can tell the two reads apart.
+const VIEWPORT_METRICS_EXPRESSION =
+  "({viewportHeight:innerHeight,scrollY:scrollY,pageHeight:document.documentElement.scrollHeight})";
+
+/**
+ * Describe scrollable content outside the viewport, or return "" when the
+ * viewport already shows the whole document. Sub-pixel differences from
+ * fractional layout are ignored so a page that fits never gets a hint.
+ */
+export function viewportOverflowHint(metrics: unknown): string {
+  if (!metrics || typeof metrics !== "object") return "";
+  const { viewportHeight, scrollY, pageHeight } = metrics as Record<
+    string,
+    unknown
+  >;
+  if (
+    !Number.isFinite(viewportHeight) ||
+    !Number.isFinite(scrollY) ||
+    !Number.isFinite(pageHeight)
+  ) {
+    return "";
+  }
+  const top = Math.round(scrollY as number);
+  const viewport = Math.round(viewportHeight as number);
+  const page = Math.round(pageHeight as number);
+  const above = top > 1;
+  const below = page - (top + viewport) > 1;
+  if (!above && !below) return "";
+  const where = above && below ? "above and below" : above ? "above" : "below";
+  return `[more content ${where} the viewport: scrollY=${top}, viewport ${viewport} / page ${page} px; scroll or use snapshot({ scope: "full_page" })]`;
 }
 
 function pageSnapshotOptionsError(message: string): TypeError {
