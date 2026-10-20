@@ -556,17 +556,8 @@ await task.finish({ keep: ["p2"] }); // Exception: keep only the result Page for
 User-created and unmanaged tabs are protected; if any remain, `keep: []` does
 not close the whole space. Do not close unwanted Pages one by one at completion;
 list the Pages to keep instead.
-Use `page.close()` only while the task is still in progress.
-
-Do not call `finish()` for a task that has not succeeded. If the user already
-took control, the stop needs no call. If you stop on an error you cannot
-recover from, or to wait for the user's answer, call `await task.handOff()`
-before ending the round. Otherwise the browser keeps showing the space as
-Agent-controlled after you stop.
-
-`[ego-browser:task]` in the output means a space is still Agent-controlled at
-the end of the round. Ignore it when the next round continues the task;
-otherwise call `finish()` or `handOff()` as described above.
+Use `page.close()` only while the task is still in progress. Do not call
+`finish()` when the task stops for user control or an error.
 
 If the final output contains `[ego-browser:notice]`, finish the current browser
 task, tell the user an Ego Lite update is available, and run

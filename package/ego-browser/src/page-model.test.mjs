@@ -21,10 +21,6 @@ import {
 } from "../dist/src/page-model.js";
 import { PageRefRegistry } from "../dist/src/page-ref-registry.js";
 import {
-  consumeAgentControlNotice,
-  resetAgentControlledSpaces,
-} from "../dist/src/agent-control-notice.js";
-import {
   consumeUnhandledPageNotices,
   resetPageNotices,
 } from "../dist/src/page-discovery.js";
@@ -967,28 +963,6 @@ async function waitForLedgerTarget(ledger, spaceId, targetId) {
   }
   throw new Error(`timed out waiting for ledger target ${targetId}`);
 }
-
-test("finish and handOff release the round-end Agent-control reminder", async () => {
-  await withFixture(async (fixture) => {
-    const services = {
-      async handOffTaskSpace() {},
-      async completeTaskSpace() {},
-    };
-    resetAgentControlledSpaces();
-    await initializeTaskSpaceHandle(taskForRound(fixture, "round-a", services));
-    assert.match(consumeAgentControlNotice(), /task space 7,/);
-
-    const handedOff = taskForRound(fixture, "round-b", services);
-    await initializeTaskSpaceHandle(handedOff);
-    await handedOff.handOff();
-    assert.equal(consumeAgentControlNotice(), "");
-
-    const finished = taskForRound(fixture, "round-c", services);
-    await initializeTaskSpaceHandle(finished);
-    await finished.finish({ keep: "all" });
-    assert.equal(consumeAgentControlNotice(), "");
-  });
-});
 
 test("background discovery does not adopt the pre-existing tab baseline", async () => {
   await withFixture(async (fixture) => {
