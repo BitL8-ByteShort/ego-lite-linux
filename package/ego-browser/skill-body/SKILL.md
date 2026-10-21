@@ -248,13 +248,10 @@ before it can choose the next target, which wastes compute.
 
 Wait for the expected result: use `waitForURL()` for navigation,
 `waitForSelector()` for element state, or `waitForFunction()` for application
-state. Avoid fixed delays when an observable condition exists. Element actions
-such as `click()` and `fill()` wait up to 3 seconds for their target, but give
-up early when the selector matches nothing on an idle page (no DOM changes and
-no requests in flight), because that target is not about to appear. When an
-element is expected to appear later, wait for it with `waitForSelector()`
-first. A snapshot captures the current moment; it does not wait for the page
-to become stable.
+state. Avoid fixed delays when an observable condition exists. Actions stop
+waiting for a missing target once the page is idle, so `waitForSelector()`
+first when an element is expected later. A snapshot captures the current
+moment; it does not wait for the page to become stable.
 `page.snapshot()` captures the current viewport. For content outside it, use
 `page.snapshot({ scope: "full_page" })`. When the document scrolls past the
 viewport, the snapshot ends with a `[more content below the viewport: ...]`
