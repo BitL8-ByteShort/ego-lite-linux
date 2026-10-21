@@ -265,7 +265,7 @@ test("captureScreenshot without a path writes unique files to EGO_BROWSER_OUTPUT
       const second = await captureScreenshot();
       assert.equal(dirname(first), root);
       assert.equal(dirname(second), root);
-      assert.match(basename(first), /^ego-browser-shot-[0-9a-f-]{36}\.png$/);
+      assert.match(basename(first), /^ego-browser-shot-\d{6}\.png$/);
       assert.notEqual(first, second);
       assert.equal(await readFile(first, "utf8"), "png");
     });
