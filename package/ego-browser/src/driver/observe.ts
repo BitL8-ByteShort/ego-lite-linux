@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomInt } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -94,9 +94,9 @@ export async function elementCenter(selectorOrRef) {
  * The embedded host runs every script in one long-lived Node process, giving
  * each run its own `globalThis` but sharing `process.env`, `os.tmpdir()` and
  * the pid. A host that needs per-run output sets
- * `globalThis.EGO_BROWSER_OUTPUT_DIR` to an absolute directory; a random name
- * keeps concurrent runs in the shared default directory from overwriting each
- * other.
+ * `globalThis.EGO_BROWSER_OUTPUT_DIR` to an absolute directory; a random
+ * six-digit suffix keeps concurrent runs in the shared default directory from
+ * overwriting each other while staying short enough to read back easily.
  */
 function defaultScreenshotPath(): string {
   const outputDir = (globalThis as { EGO_BROWSER_OUTPUT_DIR?: unknown })
@@ -117,7 +117,8 @@ function defaultScreenshotPath(): string {
     }
     directory = outputDir;
   }
-  return join(directory, `ego-browser-shot-${randomUUID()}.png`);
+  const suffix = String(randomInt(0, 1_000_000)).padStart(6, "0");
+  return join(directory, `ego-browser-shot-${suffix}.png`);
 }
 
 export async function captureScreenshot(

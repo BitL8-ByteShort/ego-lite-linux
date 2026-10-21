@@ -14,7 +14,7 @@ export function pageDefaultScreenshotPathFirstRunCase() {
       const first = await page.screenshot();
       assertEqual(dirname(first), tmpdir(), "default screenshot lands in the system temp directory");
       assert(
-        /^ego-browser-shot-[0-9a-f-]{36}\\.png$/.test(basename(first)),
+        /^ego-browser-shot-\\d{6}\\.png$/.test(basename(first)),
         "default screenshot name carries a random id: " + basename(first)
       );
       assert((await stat(first)).size > 0, "default screenshot is a non-empty file");
