@@ -1047,6 +1047,11 @@ test("auto-attached OOPIFs are instrumented and resumed without waiting for Netw
       "resuming does not await the Network.enable response",
     );
     assert.equal(
+      networkActivity(["session:page-main"]).inflight,
+      1,
+      "a migrated request stays counted for the parent until the child is enumerated",
+    );
+    assert.equal(
       networkActivity(["session:page-main", "session:frame-child"]).inflight,
       1,
       "enabling the child Network domain preserves the migrated request",

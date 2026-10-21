@@ -471,3 +471,74 @@ test("the target stays reserved until its Page behavior is restored", async () =
   await next.dispose();
   disposeDownloadArtifacts();
 });
+
+test("a finished download hands the shared behavior to a still-armed target", async () => {
+  const calls = [];
+  const listeners = new Map();
+  const services = {
+    async cdp(method, params, sessionId) {
+      calls.push({ method, params, sessionId });
+      return {};
+    },
+    subscribePageEvents(targetId, listener) {
+      listeners.set(targetId, listener);
+      return () => listeners.delete(targetId);
+    },
+  };
+  const first = preparePageDownload(services, "target-a", { timeoutMs: 1_000 });
+  const second = preparePageDownload(services, "target-b", {
+    timeoutMs: 1_000,
+  });
+  await first.ready("session-a");
+  await second.ready("session-b");
+  const pathA = calls.find((c) => c.sessionId === "session-a").params
+    .downloadPath;
+  const pathB = calls.find((c) => c.sessionId === "session-b").params
+    .downloadPath;
+
+  listeners.get("target-a")({
+    method: "Page.downloadWillBegin",
+    params: {
+      guid: "guid-a",
+      url: "https://example.test/a",
+      suggestedFilename: "a.txt",
+    },
+  });
+  const downloadA = await first.event;
+  await writeFile(join(pathA, "a.txt"), "contents-a");
+  listeners.get("target-a")({
+    method: "Page.downloadProgress",
+    params: { guid: "guid-a", state: "completed" },
+  });
+  await downloadA.path();
+
+  const afterFinish = calls.filter(
+    (c) =>
+      c.method === "Page.setDownloadBehavior" && c.sessionId !== "session-a",
+  );
+  assert.deepEqual(
+    afterFinish.at(-1),
+    {
+      method: "Page.setDownloadBehavior",
+      params: { behavior: "allow", downloadPath: pathB },
+      sessionId: "session-b",
+    },
+    "finishing the first download re-applies the second target's directory",
+  );
+  assert.equal(
+    calls.some(
+      (c) => c.sessionId === "session-a" && c.params.behavior === "default",
+    ),
+    false,
+    "the shared behavior is not reset to default while another target waits",
+  );
+
+  await second.dispose();
+  assert.equal(
+    calls.at(-1).params.behavior,
+    "default",
+    "the last interception to go restores the default behavior",
+  );
+  await downloadA.delete();
+  disposeDownloadArtifacts();
+});

@@ -88,6 +88,13 @@ function createFixture(rootDir) {
   const snapshotOptions = [];
   const browserEventListeners = new Set();
   const sleepDurations = [];
+  let targetDiscovery = true;
+  let domActivity = null;
+  let fileInputClicked = false;
+
+  function dispatchBrowserEvent(event) {
+    for (const listener of [...browserEventListeners]) listener(event);
+  }
 
   function openPendingPopup() {
     if (!popupOnNextClick) return;
@@ -99,6 +106,12 @@ function createFixture(rootDir) {
       active: false,
     });
     popupOnNextClick = null;
+    dispatchBrowserEvent({
+      method: "Target.targetCreated",
+      params: {
+        targetInfo: { targetId, type: "page", url: tabs.get(targetId).url },
+      },
+    });
   }
   async function ensureTargetSession(targetId) {
     assert(tabs.has(targetId), `unknown target ${targetId}`);
@@ -157,6 +170,19 @@ function createFixture(rootDir) {
         return { frameId: "frame-1" };
       }
       if (method === "Runtime.evaluate") {
+        if (params.expression.includes("__egoBrowserFileInputProbe")) {
+          const reading = params.expression.includes("probe.seen === true");
+          calls.push([
+            reading ? "fileInputProbeRead" : "fileInputProbeInstall",
+            sessionId,
+          ]);
+          return {
+            result: {
+              type: "boolean",
+              value: reading ? fileInputClicked : true,
+            },
+          };
+        }
         if (loseFrameOnNextResolution) {
           const failure = loseFrameOnNextResolution;
           loseFrameOnNextResolution = null;
@@ -347,6 +373,12 @@ function createFixture(rootDir) {
               },
             },
           };
+        }
+        if (params.expression.includes("__egoBrowserDomActivity")) {
+          calls.push(["domActivityProbe", sessionId]);
+          return domActivity
+            ? { result: { type: "object", value: domActivity } }
+            : { result: { type: "string", value: "complete" } };
         }
         if (params.returnByValue === false) {
           if (!elementPresent) {
@@ -802,6 +834,10 @@ function createFixture(rootDir) {
       calls.push(["setPreferredTarget", targetId]);
     },
     supportsBackgroundPageDiscovery: () => true,
+    async ensureTargetDiscovery(spaceId) {
+      calls.push(["ensureTargetDiscovery", spaceId]);
+      return targetDiscovery;
+    },
     subscribeBrowserEvents(listener) {
       browserEventListeners.add(listener);
       return () => browserEventListeners.delete(listener);
@@ -827,6 +863,22 @@ function createFixture(rootDir) {
     },
     openPopupOnNextClick(url) {
       popupOnNextClick = url;
+    },
+    setTargetDiscovery(enabled) {
+      targetDiscovery = enabled;
+    },
+    setDomActivity(value) {
+      domActivity = value;
+    },
+    setFileInputClicked(value) {
+      fileInputClicked = value;
+    },
+    emitFileChooser(value = { backendNodeId: 91 }) {
+      activeFileChooserWaiter?.emit(value);
+    },
+    markNetworkTracked(sessionId, { lastActivityAt = 0 } = {}) {
+      networkSessions.add(sessionId);
+      networkLastActivityAt.set(sessionId, lastActivityAt);
     },
     setViewportMetrics(metrics) {
       viewportMetrics = metrics;
@@ -6608,6 +6660,326 @@ test("newPage never closes a managed page when native returns its target again",
         ([kind, method]) => kind === "cdp" && method === "Target.closeTarget",
       ).length,
       closeCallsBefore,
+    );
+  });
+});
+
+test("an input action without a popup skips tab polling and settle delays", async () => {
+  await withFixture(async (fixture) => {
+    let tabListCalls = 0;
+    const task = taskForRound(fixture, "round-a", {
+      async listTabs() {
+        tabListCalls += 1;
+        return fixture.services.listTabs();
+      },
+    });
+    const page = await openTestPage(task, "https://example.test/source");
+    tabListCalls = 0;
+    const sleepsBefore = fixture.sleepDurations.length;
+    const callsBefore = fixture.calls.length;
+
+    const receipt = await page.click("#plain-button");
+
+    assert.deepEqual(receipt, {});
+    assert.equal(tabListCalls, 0, "no popup means no tab list round trips");
+    assert.deepEqual(
+      fixture.sleepDurations.slice(sleepsBefore),
+      [],
+      "the action boundary no longer sleeps to settle the tab list",
+    );
+    const syncCalls = fixture.calls
+      .slice(callsBefore)
+      .filter(
+        ([kind, method, params]) =>
+          kind === "cdp" &&
+          method === "Runtime.evaluate" &&
+          params?.expression === "0",
+      );
+    assert.equal(
+      syncCalls.length,
+      1,
+      "one page round trip orders a popup event ahead of the receipt",
+    );
+  });
+});
+
+test("a popup reported by Target.targetCreated is adopted without a settle delay", async () => {
+  await withFixture(async (fixture) => {
+    const task = taskForRound(fixture, "round-a");
+    const page = await openTestPage(task, "https://example.test/source");
+    const sleepsBefore = fixture.sleepDurations.length;
+    fixture.openPopupOnNextClick("https://example.test/popup");
+
+    const receipt = await page.click("#open-popup");
+
+    assert.equal(receipt.popups.length, 1);
+    assert.equal(receipt.popups[0].label, "p2");
+    assert.equal(
+      await task.page("p2").url(),
+      "https://example.test/popup",
+      "the popup Page is usable from the receipt",
+    );
+    assert.deepEqual(fixture.sleepDurations.slice(sleepsBefore), []);
+  });
+});
+
+test("a target created outside this task space is not adopted as a popup", async () => {
+  await withFixture(async (fixture) => {
+    const task = taskForRound(fixture, "round-a");
+    const page = await openTestPage(task, "https://example.test/source");
+    const baseCdp = fixture.services.cdp;
+    fixture.services.cdp = async (method, params, sessionId, timeoutMs) => {
+      if (method === "Input.dispatchMouseEvent") {
+        // The user opens a tab in another window while the click runs.
+        fixture.emitBrowserEvent("Target.targetCreated", {
+          targetInfo: {
+            targetId: "target-elsewhere",
+            type: "page",
+            url: "https://example.test/elsewhere",
+          },
+        });
+      }
+      return baseCdp(method, params, sessionId, timeoutMs);
+    };
+
+    const receipt = await page.click("#plain-button");
+
+    assert.deepEqual(
+      receipt,
+      {},
+      "a foreign target is not in this space's tab list",
+    );
+    const ledger = await new PageLedgerStore({ rootDir: fixture.rootDir }).read(
+      7,
+    );
+    assert.equal(
+      Object.values(ledger.pages).some(
+        (entry) => entry.targetId === "target-elsewhere",
+      ),
+      false,
+    );
+  });
+});
+
+test("without target discovery the action boundary falls back to tab polling", async () => {
+  await withFixture(async (fixture) => {
+    fixture.setTargetDiscovery(false);
+    const task = taskForRound(fixture, "round-a");
+    const page = await openTestPage(task, "https://example.test/source");
+    const sleepsBefore = fixture.sleepDurations.length;
+    fixture.openPopupOnNextClick("https://example.test/popup");
+
+    const receipt = await page.click("#open-popup");
+
+    assert.equal(receipt.popups.length, 1);
+    assert.deepEqual(
+      fixture.sleepDurations.slice(sleepsBefore),
+      [50],
+      "the polling fallback keeps its settle delay",
+    );
+  });
+});
+
+test("a missing action target fails fast once the page is idle", async () => {
+  await withFixture(async (fixture) => {
+    const task = taskForRound(fixture, "round-a");
+    const page = await openTestPage(task, "https://example.test/source");
+    fixture.markNetworkTracked("session:target-1", { lastActivityAt: 0 });
+    fixture.setElementState({ present: false });
+    fixture.setDomActivity({
+      readyState: "complete",
+      visible: true,
+      idleMs: 650,
+      framesLoading: false,
+    });
+    const startedAt = fixture.services.now();
+
+    await assert.rejects(
+      () => page.click("#nope"),
+      (error) => {
+        assert.equal(error.name, "ElementResolutionError");
+        assert.equal(error.kind, "permanent");
+        assert.match(
+          error.message,
+          /page\.click failed: Selector #nope matched 0 elements/,
+        );
+        assert.match(error.message, /idle for 650ms/);
+        assert.match(error.message, /page\.waitForSelector\(\)/);
+        return true;
+      },
+    );
+    assert.equal(
+      fixture.services.now() - startedAt,
+      500,
+      "the first attempt never gives up; the second attempt proves the page idle",
+    );
+    const probes = fixture.calls.filter(
+      ([kind]) => kind === "domActivityProbe",
+    );
+    assert.equal(
+      probes.length,
+      1,
+      "the page is probed only once idle time could have elapsed",
+    );
+  });
+});
+
+test("a missing action target keeps waiting while the page is busy", async () => {
+  await withFixture(async (fixture) => {
+    const task = taskForRound(fixture, "round-a");
+    const page = await openTestPage(task, "https://example.test/source");
+    fixture.markNetworkTracked("session:target-1", { lastActivityAt: 0 });
+    fixture.setElementState({ present: false });
+
+    // Still mutating: the observer saw a change a moment ago.
+    fixture.setDomActivity({
+      readyState: "complete",
+      visible: true,
+      idleMs: 120,
+      framesLoading: false,
+    });
+    let startedAt = fixture.services.now();
+    await assert.rejects(
+      () => page.click("#nope", { timeout: 1_000 }),
+      /page\.click timed out after 1000ms: Selector #nope matched 0 elements/,
+    );
+    assert.equal(fixture.services.now() - startedAt, 1_000);
+
+    // Idle DOM, but a request is in flight.
+    fixture.setDomActivity({
+      readyState: "complete",
+      visible: true,
+      idleMs: 900,
+      framesLoading: false,
+    });
+    const baseActivity = fixture.services.networkActivity;
+    const task2 = taskForRound(fixture, "round-a", {
+      networkActivity(sessionIds) {
+        return { ...baseActivity(sessionIds), tracking: true, inflight: 1 };
+      },
+    });
+    const busyPage = task2.page("p1");
+    startedAt = fixture.services.now();
+    await assert.rejects(
+      () => busyPage.click("#nope", { timeout: 1_000 }),
+      /page\.click timed out after 1000ms/,
+    );
+    assert.equal(fixture.services.now() - startedAt, 1_000);
+
+    // Network cannot be observed at all: never fail early.
+    const task3 = taskForRound(fixture, "round-a", {
+      networkActivity() {
+        return { tracking: false, inflight: 0, lastActivityAt: 0 };
+      },
+    });
+    startedAt = fixture.services.now();
+    await assert.rejects(
+      () => task3.page("p1").click("#nope", { timeout: 1_000 }),
+      /page\.click timed out after 1000ms/,
+    );
+    assert.equal(fixture.services.now() - startedAt, 1_000);
+  });
+});
+
+test("page.fill returns after the first accepted read-back", async () => {
+  await withFixture(async (fixture) => {
+    const task = taskForRound(fixture, "round-a");
+    const page = await openTestPage(task, "https://example.test/source");
+    const callsBefore = fixture.calls.length;
+    const sleepsBefore = fixture.sleepDurations.length;
+
+    await page.fill("#text-input", "hello");
+
+    const readBacks = fixture.calls
+      .slice(callsBefore)
+      .filter(
+        ([kind, method, params]) =>
+          kind === "cdp" &&
+          method === "Runtime.callFunctionOn" &&
+          params?.functionDeclaration?.includes("readFilledValue"),
+      );
+    assert.equal(readBacks.length, 1, "an accepted value is not re-read");
+    assert.equal(
+      fixture.sleepDurations.slice(sleepsBefore).includes(50),
+      false,
+      "no verification interval is spent on an accepted value",
+    );
+    assert.equal(fixture.fillText(), "hello");
+  });
+});
+
+test("a missing action target keeps waiting while the page is hidden", async () => {
+  await withFixture(async (fixture) => {
+    const task = taskForRound(fixture, "round-a");
+    const page = await openTestPage(task, "https://example.test/source");
+    fixture.markNetworkTracked("session:target-1", { lastActivityAt: 0 });
+    fixture.setElementState({ present: false });
+    fixture.setDomActivity({
+      readyState: "complete",
+      visible: false,
+      idleMs: 5_000,
+      framesLoading: false,
+    });
+    const startedAt = fixture.services.now();
+
+    await assert.rejects(
+      () => page.click("#nope", { timeout: 1_000 }),
+      /page\.click timed out after 1000ms: Selector #nope matched 0 elements/,
+    );
+    assert.equal(fixture.services.now() - startedAt, 1_000);
+  });
+});
+
+test("a popup waiter ignores the URL refresh of an earlier popup", async () => {
+  await withFixture(async (fixture) => {
+    resetPageNotices();
+    const task = taskForRound(fixture, "round-a");
+    const page = await openTestPage(task, "https://example.test/source");
+    fixture.openPopupOnNextClick("about:blank");
+    const oldReceipt = await page.click("#old-popup-link");
+    const oldTargetId = oldReceipt.popups[0].targetId;
+
+    const pending = page.waitForEvent("popup", { timeout: 200 });
+    fixture.tabs.get(oldTargetId).url = "https://example.test/old-final";
+    fixture.emitBrowserEvent("Target.targetInfoChanged", {
+      targetInfo: {
+        targetId: oldTargetId,
+        type: "page",
+        url: "https://example.test/old-final",
+      },
+    });
+    fixture.openPopupOnNextClick("https://example.test/next");
+    const nextReceipt = await page.click("#next-popup-link");
+
+    const popup = await pending;
+    assert.equal(popup.label, nextReceipt.popups[0].label);
+    assert.notEqual(popup.label, oldReceipt.popups[0].label);
+  });
+});
+
+test("a click that reaches a file input waits for the trailing chooser event", async () => {
+  await withFixture(async (fixture) => {
+    fixture.setFileInputClicked(true);
+    const task = taskForRound(fixture, "round-a", {
+      async sleep(ms) {
+        fixture.sleepDurations.push(ms);
+        // The chooser event lands only after the action acknowledged its input.
+        fixture.emitFileChooser();
+      },
+    });
+    const page = await openTestPage(task, "https://example.test/upload-guard");
+
+    await assert.rejects(
+      () => page.click("#open-upload"),
+      (error) => {
+        assert.equal(error.code, "EGO_FILE_CHOOSER_OPENED");
+        return true;
+      },
+    );
+    assert.deepEqual(
+      fixture.sleepDurations.slice(-1),
+      [1_000],
+      "a confirmed file-input click waits for the chooser rather than a blind settle",
     );
   });
 });
