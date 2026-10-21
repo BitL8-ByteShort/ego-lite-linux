@@ -167,6 +167,156 @@ function isRetryableResolutionError(
   );
 }
 
+/** A resolution failure that found nothing to act on, as opposed to a blocked target. */
+function isNoMatchResolutionError(error: unknown): error is Error {
+  return (
+    error instanceof ElementResolutionError &&
+    error.kind === "transient" &&
+    /matched 0 elements/.test(error.message)
+  );
+}
+
+type PopupReceiptEntry = { label: string; targetId: string };
+
+type PopupWatch = {
+  collect(sessionId: string): Promise<PopupReceiptEntry[]>;
+  dispose(): void;
+};
+
+type DomActivityProbe = {
+  readyState: string;
+  visible: boolean;
+  idleMs: number;
+  framesLoading: boolean;
+};
+
+// Installs one MutationObserver per document on first use and reports the
+// time since the last observed mutation (zero right after installation). The
+// retry loop separately requires a full idle window since the action started.
+const DOM_ACTIVITY_PROBE = `(() => {
+  const key = "__egoBrowserDomActivity";
+  let tracker = window[key];
+  if (!tracker) {
+    tracker = { last: performance.now(), observer: null };
+    try {
+      const observer = new MutationObserver(() => {
+        tracker.last = performance.now();
+      });
+      observer.observe(document.documentElement || document, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        characterData: true,
+      });
+      tracker.observer = observer;
+    } catch (error) {
+      tracker.observer = null;
+    }
+    Object.defineProperty(window, key, {
+      value: tracker,
+      configurable: true,
+      enumerable: false,
+      writable: true,
+    });
+  }
+  let framesLoading = false;
+  for (const frame of document.querySelectorAll("iframe, frame")) {
+    try {
+      const doc = frame.contentDocument;
+      if (doc && doc.readyState !== "complete") framesLoading = true;
+    } catch (error) {
+      // Cross-origin frames are covered by network tracking.
+    }
+  }
+  return {
+    readyState: document.readyState,
+    // Hidden documents run throttled timers, so their quiet is not idleness.
+    visible: document.visibilityState === "visible",
+    idleMs: tracker.observer ? performance.now() - tracker.last : -1,
+    framesLoading,
+  };
+})()`;
+
+// Records, for one guarded action, whether a click reached a file input in
+// the main document. A capture listener sees trusted clicks, label clicks and
+// scripted clicks on attached inputs (retargeted through shadow roots); a
+// detached input created on the fly only receives its own click, so the
+// prototype methods are wrapped for the duration of the action. Frames have
+// their own documents, so a page with frames reports "unknown".
+const FILE_INPUT_PROBE_INSTALL = `(() => {
+  const key = "__egoBrowserFileInputProbe";
+  const previous = window[key];
+  if (previous) previous.restore();
+  const proto = HTMLInputElement.prototype;
+  const originals = { click: proto.click, showPicker: proto.showPicker };
+  const probe = { seen: false, handler: null, restore: null };
+  const markIfFile = (input) => {
+    if (input instanceof HTMLInputElement && input.type === "file") probe.seen = true;
+  };
+  probe.handler = (event) => {
+    const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+    markIfFile(path.length > 0 ? path[0] : event.target);
+  };
+  document.addEventListener("click", probe.handler, true);
+  for (const name of Object.keys(originals)) {
+    if (typeof originals[name] !== "function") continue;
+    proto[name] = function (...args) {
+      markIfFile(this);
+      return originals[name].apply(this, args);
+    };
+  }
+  probe.restore = () => {
+    document.removeEventListener("click", probe.handler, true);
+    for (const name of Object.keys(originals)) {
+      if (typeof originals[name] === "function") proto[name] = originals[name];
+    }
+    delete window[key];
+  };
+  Object.defineProperty(window, key, {
+    value: probe,
+    configurable: true,
+    enumerable: false,
+    writable: true,
+  });
+  return true;
+})()`;
+const FILE_INPUT_PROBE_READ = `(() => {
+  const key = "__egoBrowserFileInputProbe";
+  const probe = window[key];
+  if (!probe) return null;
+  probe.restore();
+  if (probe.seen === true) return true;
+  return document.querySelector("iframe, frame") ? null : false;
+})()`;
+
+/**
+ * Build the Target.setDiscoverTargets enabler. Browser-level commands are
+ * routed through the selected task space, so discovery is enabled once per
+ * space. A failed or unsupported attempt resolves false and is retried on the
+ * next call.
+ */
+function createTargetDiscoveryEnabler(
+  supported: () => boolean,
+  cdp: (method: string, params: Record<string, unknown>) => Promise<unknown>,
+): (spaceId: number) => Promise<boolean> {
+  const enabling = new Map<number, Promise<boolean>>();
+  return (spaceId) => {
+    if (!supported()) return Promise.resolve(false);
+    let pending = enabling.get(spaceId);
+    if (!pending) {
+      pending = cdp("Target.setDiscoverTargets", { discover: true }).then(
+        () => true,
+        () => {
+          enabling.delete(spaceId);
+          return false;
+        },
+      );
+      enabling.set(spaceId, pending);
+    }
+    return pending;
+  };
+}
+
 type AdoptPageOptions = {
   as?: string;
 };
@@ -384,6 +534,12 @@ type PageModelServices = {
   invalidateSession(targetId: string): void;
   setPreferredTarget(targetId: string): void;
   supportsBackgroundPageDiscovery(): boolean;
+  /**
+   * Enable target discovery once per task space, under that space's gate
+   * selection. Resolves false when the runtime cannot deliver Target.*
+   * events, so callers fall back to polling the tab list.
+   */
+  ensureTargetDiscovery(spaceId: number): Promise<boolean>;
   subscribeBrowserEvents(listener: (event: any) => void): () => void;
   subscribePageEvents(
     targetId: string,
@@ -452,6 +608,31 @@ const CREATED_SPACE_TAB_TIMEOUT_MS = 2_000;
 const CREATED_SPACE_TAB_POLL_INTERVAL_MS = 50;
 const DEFAULT_PAGE_ACTION_TIMEOUT_MS = 3_000;
 const PAGE_ACTION_RESOLUTION_RETRY_MS = 500;
+// A missing action target stops being retried once the page has shown no DOM
+// mutation and no network activity for this long; a page that is still
+// loading or rendering keeps the full action timeout.
+const MISSING_TARGET_IDLE_MS = 500;
+const MISSING_TARGET_PROBE_TIMEOUT_MS = 1_000;
+// One page round trip after an action orders a popup's Target.targetCreated
+// event ahead of the response, so no settle delay is needed.
+const POPUP_SYNC_TIMEOUT_MS = 1_000;
+// The native tab list can lag the CDP target event by a few milliseconds.
+const POPUP_TAB_LIST_RETRIES = 10;
+const POPUP_TAB_LIST_RETRY_MS = 20;
+// Legacy settle for runtimes that cannot deliver Target.* events.
+const POPUP_POLL_SETTLE_MS = 50;
+// After a navigation commits, cross-process iframes are still being created
+// and auto-attached. Enumerating frame sessions in that window can attach a
+// second session to a child and drop its in-flight requests from network
+// tracking (see ensureFrameSessions), so navigation keeps the settle that the
+// previous tab-list diff provided. Input actions do not need it.
+const NAVIGATION_FRAME_SETTLE_MS = 60;
+// A file chooser request can trail the input acknowledgement. When the page
+// reports that the action clicked a file input, wait for the chooser event
+// (it resolves the race early); when the page could not be asked, fall back
+// to the short settle the tab-list diff used to provide.
+const FILE_CHOOSER_OPEN_WAIT_MS = 1_000;
+const FILE_CHOOSER_SETTLE_MS = 50;
 const CONTROL_POLL_INTERVAL_MS = 20_000;
 const PAGE_EVALUATE_EXECUTION_TIMEOUT_MS = 14_000;
 const PAGE_EVALUATE_TRANSPORT_TIMEOUT_MS = 15_000;
@@ -758,6 +939,10 @@ const baseDefaultServices: Omit<PageModelServices, "ledger" | "pageBudget"> = {
   invalidateSession,
   setPreferredTarget,
   supportsBackgroundPageDiscovery: isBrowserRuntime,
+  ensureTargetDiscovery: createTargetDiscoveryEnabler(
+    () => isBrowserRuntime(),
+    (method, params) => browserCdp(method, params),
+  ),
   subscribeBrowserEvents,
   subscribePageEvents,
   prepareDownload(targetId, options) {
@@ -940,9 +1125,7 @@ class TaskSpace {
     // cannot fall into the gap between the initial inventory and the callback.
     try {
       await this.#services.gate.withSpace(this.id, async () => {
-        await this.#services.cdp("Target.setDiscoverTargets", {
-          discover: true,
-        });
+        await this.#services.ensureTargetDiscovery(this.id);
         await this.#recoverExistingChildPages();
       });
     } catch {
@@ -1644,6 +1827,7 @@ class Page {
           waitUntil,
         });
       },
+      { inputAction: false },
     );
     return receipt;
   }
@@ -1661,6 +1845,7 @@ class Page {
           waitUntil,
         });
       },
+      { inputAction: false },
     );
     return receipt;
   }
@@ -2621,7 +2806,7 @@ class Page {
           ({ refMap, iframeSessions }, services) =>
             operation(sessionId, refMap, iframeSessions, services),
         ),
-      options.guardFileChooser,
+      { guardFileChooser: options.guardFileChooser },
     );
     return receipt;
   }
@@ -2638,6 +2823,58 @@ class Page {
       Math.max(1, remainingMs),
     );
     return { refMap, iframeSessions };
+  }
+
+  /**
+   * Report how long the page has been idle when an action target is missing.
+   * Returns null while the page is still loading, mutating, fetching, or
+   * hidden (throttled timers), or when the runtime cannot observe network
+   * activity, so the action keeps waiting for its full timeout in every
+   * uncertain case.
+   */
+  async #idleWithoutTarget(
+    sessionId: string,
+  ): Promise<{ idleMs: number } | null> {
+    let sessions: string[];
+    try {
+      sessions = await this.#services.pageNetworkSessions(
+        sessionId,
+        MISSING_TARGET_PROBE_TIMEOUT_MS,
+      );
+    } catch {
+      return null;
+    }
+    const network = this.#services.networkActivity(sessions);
+    if (!network.tracking || network.inflight > 0) return null;
+    if (
+      this.#services.now() - network.lastActivityAt <
+      MISSING_TARGET_IDLE_MS
+    ) {
+      return null;
+    }
+    let probe: DomActivityProbe | undefined;
+    try {
+      const response = await this.#services.cdp(
+        "Runtime.evaluate",
+        { expression: DOM_ACTIVITY_PROBE, returnByValue: true },
+        sessionId,
+        MISSING_TARGET_PROBE_TIMEOUT_MS,
+      );
+      probe = runtimeValue(response, DOM_ACTIVITY_PROBE) as DomActivityProbe;
+    } catch {
+      return null;
+    }
+    if (
+      !probe ||
+      probe.readyState !== "complete" ||
+      !probe.visible ||
+      probe.framesLoading ||
+      typeof probe.idleMs !== "number" ||
+      probe.idleMs < MISSING_TARGET_IDLE_MS
+    ) {
+      return null;
+    }
+    return { idleMs: Math.round(probe.idleMs) };
   }
 
   /**
@@ -2700,6 +2937,26 @@ class Page {
           ? isRetryableElementStateError(error)
           : isRetryableResolutionError(error, pageSessionId);
         if (!retryable && !exhausted) throw error;
+        // Idle time counts from this action's start, not from the page's
+        // last mutation: work started by the previous action may not have
+        // touched the DOM yet, so the first attempt never gives up early.
+        if (
+          !inputDispatched &&
+          isNoMatchResolutionError(error) &&
+          this.#services.now() - startedAt >= MISSING_TARGET_IDLE_MS
+        ) {
+          const idle = await this.#idleWithoutTarget(pageSessionId);
+          if (idle) {
+            throw new ElementResolutionError(
+              `${actionName} failed: ${error.message}. The page has been idle ` +
+                `for ${idle.idleMs}ms with no DOM changes and no network ` +
+                `requests in flight, so the target is not about to appear. ` +
+                `Check the selector against a fresh snapshot, or use ` +
+                `page.waitForSelector() when the element is expected later.`,
+              "permanent",
+            );
+          }
+        }
         if (remainingMs <= 0) {
           const blocker = exhausted && lastBlocker ? lastBlocker : error;
           // Report the time the action really took: a slow page can overrun
@@ -2737,7 +2994,9 @@ class Page {
     operation: (sessionId: string) => Promise<void>,
   ): Promise<PageActionReceipt> {
     const page = await this.#resolve();
-    const { receipt } = await this.#runActionBoundary(page, operation, true);
+    const { receipt } = await this.#runActionBoundary(page, operation, {
+      guardFileChooser: true,
+    });
     return receipt;
   }
 
@@ -2780,7 +3039,12 @@ class Page {
   async #runActionBoundary<T>(
     page: PageTarget,
     operation: (sessionId: string) => Promise<T>,
-    guardFileChooser = false,
+    {
+      guardFileChooser = false,
+      // Navigation already waits on page lifecycle; only input actions need
+      // the ordering round trip to see a popup created by the input itself.
+      inputAction = true,
+    }: { guardFileChooser?: boolean; inputAction?: boolean } = {},
   ): Promise<{ value: T; receipt: PageActionReceipt }> {
     const explicitDownload = this.#pendingDownload;
     const armedDownload = explicitDownload
@@ -2808,11 +3072,12 @@ class Page {
               cancel: true,
             })
           : undefined;
+      const popupWatch = await this.#watchPopups(inputAction);
       try {
         await fileChooserGuard?.ready;
-        const before = new Set(
-          (await this.#services.listTabs()).map((tab) => tab.targetId),
-        );
+        const fileInputProbe = fileChooserGuard
+          ? await this.#installFileInputProbe(sessionId)
+          : false;
         let actionError: unknown;
         let value: T | undefined;
         try {
@@ -2830,28 +3095,32 @@ class Page {
           };
         }
 
-        // A popup is normally created synchronously by the input event. A short
-        // settle covers native tab-list propagation without turning this into a
-        // navigation wait or silently changing the page's active state.
-        await this.#services.sleep(50);
+        if (!inputAction) {
+          await this.#services.sleep(NAVIGATION_FRAME_SETTLE_MS);
+        }
         let popupError: unknown;
-        const popups: Array<{ label: string; targetId: string }> = [];
+        let popups: PopupReceiptEntry[] = [];
         try {
-          const after = await this.#services.listTabs();
-          for (const tab of after) {
-            if (before.has(tab.targetId)) continue;
-            const managed = await this.#services.ledger.addPage(
-              this.spaceId,
-              tab.targetId,
-              { openedBy: "agent" },
-            );
-            recordDiscoveredPage(this.spaceId, managed, this.label, tab.url);
-            popups.push({ label: managed.label, targetId: managed.targetId });
-          }
+          popups = await popupWatch.collect(sessionId);
         } catch (error) {
           popupError = error;
         }
 
+        if (fileChooserGuard && !fileChooserGuard.peek()) {
+          const clickedFileInput = fileInputProbe
+            ? await this.#readFileInputProbe(sessionId)
+            : null;
+          if (clickedFileInput !== false) {
+            await Promise.race([
+              fileChooserGuard.event.catch(() => {}),
+              this.#services.sleep(
+                clickedFileInput
+                  ? FILE_CHOOSER_OPEN_WAIT_MS
+                  : FILE_CHOOSER_SETTLE_MS,
+              ),
+            ]);
+          }
+        }
         if (fileChooserGuard?.peek()) {
           throw unhandledFileChooserError();
         }
@@ -2863,9 +3132,153 @@ class Page {
           receipt: popups.length > 0 ? { popups } : {},
         };
       } finally {
+        popupWatch.dispose();
         await fileChooserGuard?.dispose();
       }
     });
+  }
+
+  /**
+   * Start observing popups for one action. With target discovery the watch
+   * records Target.targetCreated events and costs nothing when no popup
+   * opens; without it the watch falls back to diffing the tab list.
+   */
+  async #watchPopups(inputAction: boolean): Promise<PopupWatch> {
+    const discovering = await this.#services.ensureTargetDiscovery(
+      this.spaceId,
+    );
+    if (!discovering) return this.#pollingPopupWatch();
+    const created = new Map<string, string>();
+    const stop = this.#services.subscribeBrowserEvents((event) => {
+      const info = event?.params?.targetInfo;
+      if (
+        event?.method !== "Target.targetCreated" ||
+        info?.type !== "page" ||
+        typeof info.targetId !== "string"
+      ) {
+        return;
+      }
+      created.set(info.targetId, typeof info.url === "string" ? info.url : "");
+    });
+    return {
+      dispose: stop,
+      collect: async (sessionId) => {
+        if (created.size === 0 && inputAction) {
+          // A popup opened by the input is created by the browser before this
+          // page answers any later command, so one round trip delivers its
+          // Target.targetCreated event ahead of the response.
+          await this.#syncWithPage(sessionId);
+        }
+        if (created.size === 0) return [];
+        return this.#adoptCreatedPopups(created);
+      },
+    };
+  }
+
+  async #pollingPopupWatch(): Promise<PopupWatch> {
+    const before = new Set(
+      (await this.#services.listTabs()).map((tab) => tab.targetId),
+    );
+    return {
+      dispose: () => {},
+      collect: async () => {
+        // A popup is normally created synchronously by the input event. A short
+        // settle covers native tab-list propagation without turning this into a
+        // navigation wait or silently changing the page's active state.
+        await this.#services.sleep(POPUP_POLL_SETTLE_MS);
+        const created = new Map<string, string>();
+        for (const tab of await this.#services.listTabs()) {
+          if (!before.has(tab.targetId)) created.set(tab.targetId, tab.url);
+        }
+        if (created.size === 0) return [];
+        return this.#adoptCreatedPopups(created);
+      },
+    };
+  }
+
+  /** Returns true when the main document accepted the file-input click probe. */
+  async #installFileInputProbe(sessionId: string): Promise<boolean> {
+    try {
+      const response = await this.#services.cdp(
+        "Runtime.evaluate",
+        { expression: FILE_INPUT_PROBE_INSTALL, returnByValue: true },
+        sessionId,
+        POPUP_SYNC_TIMEOUT_MS,
+      );
+      return runtimeValue(response, FILE_INPUT_PROBE_INSTALL) === true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Returns whether a click reached a file input, or null when unknown. */
+  async #readFileInputProbe(sessionId: string): Promise<boolean | null> {
+    try {
+      const response = await this.#services.cdp(
+        "Runtime.evaluate",
+        { expression: FILE_INPUT_PROBE_READ, returnByValue: true },
+        sessionId,
+        POPUP_SYNC_TIMEOUT_MS,
+      );
+      const value = runtimeValue(response, FILE_INPUT_PROBE_READ);
+      return typeof value === "boolean" ? value : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async #syncWithPage(sessionId: string): Promise<void> {
+    try {
+      await this.#services.cdp(
+        "Runtime.evaluate",
+        { expression: "0", returnByValue: true },
+        sessionId,
+        POPUP_SYNC_TIMEOUT_MS,
+      );
+    } catch {
+      // A navigating or dialog-blocked page cannot answer; the popup, if any,
+      // is adopted by background discovery or the next task.tabs().
+    }
+  }
+
+  async #adoptCreatedPopups(
+    created: Map<string, string>,
+  ): Promise<PopupReceiptEntry[]> {
+    // Target discovery is browser-wide; the tab list scopes it to this space.
+    let tabs = await this.#services.listTabs();
+    for (let attempt = 0; attempt < POPUP_TAB_LIST_RETRIES; attempt += 1) {
+      const known = new Set(tabs.map((tab) => tab.targetId));
+      if ([...created.keys()].every((targetId) => known.has(targetId))) break;
+      await this.#services.sleep(POPUP_TAB_LIST_RETRY_MS);
+      tabs = await this.#services.listTabs();
+    }
+    const popups: PopupReceiptEntry[] = [];
+    for (const [targetId, eventUrl] of created) {
+      const tab = tabs.find((candidate) => candidate.targetId === targetId);
+      if (!tab) continue;
+      const url = tab.url || eventUrl;
+      try {
+        const managed = await this.#services.ledger.addPage(
+          this.spaceId,
+          targetId,
+          { openedBy: "agent" },
+        );
+        recordDiscoveredPage(this.spaceId, managed, this.label, url);
+        popups.push({ label: managed.label, targetId: managed.targetId });
+      } catch (error) {
+        // Background discovery may have adopted the same target first.
+        const label =
+          typeof this.#services.ledger.read === "function"
+            ? labelForTarget(
+                await this.#services.ledger.read(this.spaceId),
+                targetId,
+              )
+            : undefined;
+        if (!label) throw error;
+        popups.push({ label, targetId });
+      }
+    }
+    return popups;
   }
 
   async #refMapForAction(

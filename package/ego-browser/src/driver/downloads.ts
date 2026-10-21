@@ -38,6 +38,14 @@ export type DownloadInterception = {
 const artifactDirectories = new Set<string>();
 const activeInterceptions = new Set<() => void>();
 const activeDownloadTargets = new Set<string>();
+// Page.setDownloadBehavior is applied to the shared browser context, so the
+// most recently armed interception wins. Remember every armed interception so
+// that one finishing can hand the behavior back to another that still waits,
+// instead of resetting to default underneath it.
+const armedDownloadBehaviors = new Map<
+  string,
+  { sessionId: string; downloadPath: string }
+>();
 
 /**
  * Arm one Page session for its next download without changing the shared
@@ -75,6 +83,21 @@ export function preparePageDownload(
   const resetBehavior = async () => {
     const sessions = [...configuredSessions];
     configuredSessions.clear();
+    armedDownloadBehaviors.delete(targetId);
+    const stillArmed = [...armedDownloadBehaviors.values()].at(-1);
+    if (stillArmed) {
+      // Another Page is still waiting for its download: re-apply its
+      // directory rather than resetting the shared behavior to default.
+      await services
+        .cdp(
+          "Page.setDownloadBehavior",
+          { behavior: "allow", downloadPath: stillArmed.downloadPath },
+          stillArmed.sessionId,
+          1_000,
+        )
+        .catch(() => {});
+      return;
+    }
     await Promise.all(
       sessions.map((sessionId) =>
         services
@@ -198,6 +221,7 @@ export function preparePageDownload(
         sessionId,
       );
       configuredSessions.add(sessionId);
+      armedDownloadBehaviors.set(targetId, { sessionId, downloadPath });
     },
     event,
     async dispose(reason = new Error("download waiter was disposed")) {

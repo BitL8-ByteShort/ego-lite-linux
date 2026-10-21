@@ -46,6 +46,10 @@ import { pageTextLocatorCase } from "./page-text-locators.mjs";
 import { pageSelectorCompatibilityCase } from "./page-selector-compatibility.mjs";
 import { pagePopupWaiterCase } from "./page-popup-waiter.mjs";
 import {
+  pageActionIdleFailFastCase,
+  pageActionPopupReceiptCase,
+} from "./page-action-latency.mjs";
+import {
   concurrentTaskSpaceDownloadCase,
   pageDownloadCase,
   pageDownloadPrepareRoundCase,
@@ -125,6 +129,8 @@ export const e2eCases = [
   { name: "page complex evaluate", body: pageComplexEvaluateCase },
   { name: "page fetch", body: pageFetchCase },
   { name: "page actions and popup adoption", body: pageActionsAndPopupCase },
+  { name: "Page action popup receipts", body: pageActionPopupReceiptCase },
+  { name: "Page action idle fail-fast", body: pageActionIdleFailFastCase },
   { name: "Page click hit target", body: pageClickHitTargetCase },
   { name: "Page action motion tolerance", body: pageActionMotionCase },
   { name: "Page drag and canvas drawing", body: pageDragAndDrawCase },

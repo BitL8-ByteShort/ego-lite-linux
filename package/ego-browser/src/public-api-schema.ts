@@ -36,7 +36,7 @@ const timeout = option(
 );
 const actionTimeout = option(
   "positiveMilliseconds",
-  "Maximum wait for the element to become usable in milliseconds; defaults to 3000.",
+  "Maximum wait for the element to become usable in milliseconds; defaults to 3000. A selector that matches nothing on an idle page fails before the timeout.",
 );
 const delay = option("nonNegativeNumber", "Input delay in milliseconds.");
 const button = option("string", "Mouse button.", ["left", "middle", "right"]);

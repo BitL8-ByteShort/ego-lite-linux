@@ -113,7 +113,12 @@ export async function click(target: MouseTarget, options: ClickOptions = {}) {
     if (!isInputDispatchTimeout(error)) throw error;
     dispatchError = error;
   }
-  const completed = await finishClickProbe(point, probeId, clickCount);
+  const completed = await finishClickProbe(
+    point,
+    probeId,
+    clickCount,
+    Boolean(dispatchError),
+  );
   if (dispatchError && !completed) throw dispatchError;
 }
 
@@ -147,7 +152,11 @@ export async function hover(target: MouseTarget, options: HoverOptions = {}) {
     if (!isInputDispatchTimeout(error)) throw error;
     dispatchError = error;
   }
-  const completed = await finishHoverProbe(point, probeId);
+  const completed = await finishHoverProbe(
+    point,
+    probeId,
+    Boolean(dispatchError),
+  );
   if (dispatchError && !completed) throw dispatchError;
 }
 
@@ -207,7 +216,12 @@ export async function dragMouse(
     if (!isInputDispatchTimeout(error)) throw error;
     dispatchError = error;
   }
-  const completed = await finishDragProbe(resolved, probeId, button);
+  const completed = await finishDragProbe(
+    resolved,
+    probeId,
+    button,
+    Boolean(dispatchError),
+  );
   if (dispatchError && !completed) throw dispatchError;
 }
 
@@ -250,9 +264,13 @@ async function finishClickProbe(
   point: Point,
   id: string | null,
   clickCount: number,
+  settle: boolean,
 ) {
   if (!id) return false;
-  await inputEventDelay(50);
+  // The renderer dispatches the click before it acknowledges the mouse input,
+  // so the probe is already decided once dispatch returned. Only a timed-out
+  // dispatch needs a settle before the page is asked whether input arrived.
+  if (settle) await inputEventDelay(50);
   try {
     const result = await cdp(
       "Runtime.evaluate",
@@ -357,9 +375,13 @@ async function installHoverProbe(point: Point) {
   }
 }
 
-async function finishHoverProbe(point: Point, id: string | null) {
+async function finishHoverProbe(
+  point: Point,
+  id: string | null,
+  settle: boolean,
+) {
   if (!id) return false;
-  await inputEventDelay(50);
+  if (settle) await inputEventDelay(50);
   try {
     const result = await cdp(
       "Runtime.evaluate",
@@ -402,9 +424,10 @@ async function finishDragProbe(
   points: Point[],
   id: string | null,
   button: MouseButton,
+  settle: boolean,
 ) {
   if (!id) return false;
-  await inputEventDelay(50);
+  if (settle) await inputEventDelay(50);
   const first = points[0];
   const last = points.at(-1);
   try {

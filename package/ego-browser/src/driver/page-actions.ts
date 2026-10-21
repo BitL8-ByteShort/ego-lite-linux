@@ -847,6 +847,10 @@ async function verifyFillOutcome(
       String(result?.type ?? ""),
     );
     lastOutcome = outcome;
+    // An accepted value is final: a later application reformat is accepted
+    // too, so there is nothing to wait for. Only a rejected reading is
+    // re-read, because the control may still be propagating the input.
+    if (fillOutcomeAccepted(outcome)) return outcome;
     const reading = `${outcome}\u0000${String(result?.actual ?? "")}`;
     if (reading === prior) {
       consecutiveReads += 1;

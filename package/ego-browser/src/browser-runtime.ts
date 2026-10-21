@@ -930,6 +930,7 @@ export function networkActivity(sessionIds: string[]): {
   let inflight = 0;
   let lastActivityAt = 0;
   const pendingRequests: string[] = [];
+  const counted = new Set<string>();
   for (const sessionId of new Set(sessionIds)) {
     const targetId = sessionTargets.get(sessionId);
     const target = targetId ? targetStates.get(targetId) : undefined;
@@ -941,12 +942,21 @@ export function networkActivity(sessionIds: string[]): {
       tracking = false;
       continue;
     }
-    inflight += target.inflightNetworkRequests.size;
-    lastActivityAt = Math.max(lastActivityAt, target.lastNetworkActivityAt);
-    for (const request of target.inflightNetworkRequests.values()) {
-      pendingRequests.push(
-        `${request.type || "Other"} ${request.url || request.requestId}`,
-      );
+    // A request migrates to a child frame target the moment that target
+    // attaches, which can precede the caller's next frame enumeration. Count
+    // the whole subtree so migration never hides an in-flight request.
+    for (const treeTargetId of pageTreeTargetIds(targetId!)) {
+      if (counted.has(treeTargetId)) continue;
+      counted.add(treeTargetId);
+      const member = targetStates.get(treeTargetId);
+      if (!member) continue;
+      inflight += member.inflightNetworkRequests.size;
+      lastActivityAt = Math.max(lastActivityAt, member.lastNetworkActivityAt);
+      for (const request of member.inflightNetworkRequests.values()) {
+        pendingRequests.push(
+          `${request.type || "Other"} ${request.url || request.requestId}`,
+        );
+      }
     }
   }
   return { tracking, inflight, lastActivityAt, pendingRequests };
