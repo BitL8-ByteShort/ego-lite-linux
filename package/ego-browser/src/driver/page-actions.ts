@@ -7,6 +7,7 @@ import { RefMap } from "../ref-map.js";
 import {
   ACTION_TARGET_STATE_HELPERS,
   EDIT_ACTION_TARGET_HELPERS,
+  ENABLED_SCROLL_TARGET_HELPERS,
   HIT_TARGET_HELPERS,
   SCROLL_TARGET_HELPERS,
 } from "./action-target.js";
@@ -258,6 +259,8 @@ export async function clickInPage(
     },
   );
   try {
+    // One page round trip computes the action point and verifies that the
+    // element is visible, enabled, and (unless forced) the hit target there.
     let point = await resolveElementPoint(
       services,
       target.sessionId,
@@ -267,6 +270,7 @@ export async function clickInPage(
         frameId: target.frameId,
         actionName: "page.click",
         hitTest: !options.force,
+        requireEnabled: true,
         stability: "recompute",
         pageSessionId: sessionId,
         iframeSessions,
@@ -308,20 +312,13 @@ export async function clickInPage(
         sessionId,
       );
       point = { ...pagePoint, local: point.local };
-      await assertElementEnabled(
+      await assertClickTargetActionable(
         services,
         target.sessionId,
         target.objectId,
-        "page.click",
+        point.local,
+        { hitTest: !options.force },
       );
-      if (!options.force) {
-        await assertElementReceivesPointerEvents(
-          services,
-          target.sessionId,
-          target.objectId,
-          point.local,
-        );
-      }
       await dispatchMouseEvent(services, target.sessionId, {
         type: "mouseMoved",
         x: point.x,
@@ -333,24 +330,18 @@ export async function clickInPage(
     }
     for (let count = 1; count <= clickCount; count += 1) {
       // Moving the pointer or completing an earlier click can change layout.
-      // Recheck before every press so hover-created overlays fail closed.
-      // A same-process iframe must keep its native move/press sequence
-      // contiguous; its state was checked immediately before that gesture's
-      // final move.
+      // Recheck the enabled state and the hit target in one page call before
+      // every press so hover-created overlays fail closed. A same-process
+      // iframe must keep its native move/press sequence contiguous; its state
+      // was checked immediately before that gesture's final move, and later
+      // presses in any iframe only recheck the enabled state.
       if (!target.frameId || count > 1) {
-        await assertElementEnabled(
-          services,
-          target.sessionId,
-          target.objectId,
-          "page.click",
-        );
-      }
-      if (!options.force && !target.frameId) {
-        await assertElementReceivesPointerEvents(
+        await assertClickTargetActionable(
           services,
           target.sessionId,
           target.objectId,
           point.local,
+          { hitTest: !options.force && !target.frameId },
         );
       }
       await dispatchMouseEvent(services, target.sessionId, {
@@ -1317,6 +1308,8 @@ type ResolveElementPointOptions = {
   frameId?: string;
   actionName?: string;
   hitTest?: boolean;
+  /** Also fail with "element is disabled" in the same page round trip. */
+  requireEnabled?: boolean;
   stability?: ElementPointStability;
   pageSessionId?: string;
   iframeSessions?: Map<string, string>;
@@ -1352,6 +1345,7 @@ async function resolveElementPoint(
     frameId,
     actionName = "page.click",
     hitTest = true,
+    requireEnabled = false,
     stability = "strict",
     pageSessionId = sessionId,
     iframeSessions = new Map<string, string>(),
@@ -1398,13 +1392,21 @@ async function resolveElementPoint(
       return { error: "element is not stable" };
     }`
       : settleExpression;
+  const helpers = hitTest
+    ? HIT_TARGET_HELPERS
+    : requireEnabled
+      ? ENABLED_SCROLL_TARGET_HELPERS
+      : SCROLL_TARGET_HELPERS;
   const expression = `async function(${position ? "position" : ""}) {
-    ${hitTest ? HIT_TARGET_HELPERS : SCROLL_TARGET_HELPERS}
+    ${helpers}
     if (!this.isConnected) return { error: "element is not connected" };
     let rect = this.getBoundingClientRect();
     let point = ${pointExpression};
     if (rect.width <= 0 || rect.height <= 0 || !point) {
       return { error: "element is not visible" };
+    }
+    if (${requireEnabled ? "true" : "false"} && isActionTargetDisabled(this)) {
+      return { error: "element is disabled" };
     }
     const scroll = scrollRequestForPoint(this, point);
     if (scroll) return { scroll };
@@ -1779,6 +1781,53 @@ async function cursorPointForElement(
     return point;
   } catch {
     return inputPoint;
+  }
+}
+
+/**
+ * Re-validate a click target after the pointer moved, in one page round trip:
+ * the element must still be connected and enabled and, when `hitTest` is set,
+ * nothing may intercept pointer events at the frame-local `point`. Failures
+ * keep the resolver's wording and order (disabled before intercepted) so the
+ * retry loop and callers see the same transient errors as before.
+ */
+async function assertClickTargetActionable(
+  services: PageActionServices,
+  sessionId: string,
+  objectId: string,
+  point: { x: number; y: number },
+  options: { hitTest: boolean; actionName?: string },
+): Promise<void> {
+  const { hitTest, actionName = "page.click" } = options;
+  const expression = `function clickTargetActionable(point) {
+    ${hitTest ? HIT_TARGET_HELPERS : ACTION_TARGET_STATE_HELPERS}
+    if (!this.isConnected) return { error: "element is not connected" };
+    if (isActionTargetDisabled(this)) return { error: "element is disabled" };
+    if (${hitTest ? "true" : "false"}) {
+      const interceptor = interceptingElementAtPoint(this, point);
+      if (interceptor) {
+        return { error: describeHitTarget(interceptor) + " intercepts pointer events" };
+      }
+    }
+    return { ok: true };
+  }`;
+  const response = await services.cdp(
+    "Runtime.callFunctionOn",
+    {
+      functionDeclaration: expression,
+      objectId,
+      arguments: [{ value: point }],
+      returnByValue: true,
+      awaitPromise: false,
+    },
+    sessionId,
+  );
+  const result = runtimeValue(response, expression);
+  if (typeof result?.error === "string") {
+    throw new ElementResolutionError(
+      `${actionName} failed: ${result.error}`,
+      "transient",
+    );
   }
 }
 

@@ -62,7 +62,10 @@ type ScrollUntilCondition =
   | null;
 type MouseEventOptions = Record<string, unknown>;
 
-const INPUT_EVENT_DELAY_MS = 25;
+// Native mouse events are delivered in order by the renderer, so a click needs
+// no pause between move, press, and release. Explicit `delayMs` options and
+// the pointer-driven drags keep their caller-chosen pauses.
+const INPUT_EVENT_DELAY_MS = 0;
 const INPUT_DISPATCH_TIMEOUT_MS = 1000;
 
 /**
@@ -90,8 +93,6 @@ export async function click(target: MouseTarget, options: ClickOptions = {}) {
   const buttons = pressedButtons(button);
   const clickCount = options.clickCount ?? options.clicks ?? 1;
   maybeHighlight(point, options.label);
-  const probeId = await installClickProbe(point);
-  let dispatchError: unknown = null;
   try {
     await dispatchMouse(point, "mouseMoved", {
       button: "none",
@@ -111,15 +112,13 @@ export async function click(target: MouseTarget, options: ClickOptions = {}) {
     });
   } catch (error) {
     if (!isInputDispatchTimeout(error)) throw error;
-    dispatchError = error;
+    // The renderer did not acknowledge native input in time (typically an
+    // occluded or hidden window). Only this path pays for the page-side
+    // probe: it waits briefly for the trusted click to land and otherwise
+    // dispatches synthetic mouse events to the element under the point.
+    const completed = await recoverTimedOutClick(point, clickCount);
+    if (!completed) throw error;
   }
-  const completed = await finishClickProbe(
-    point,
-    probeId,
-    clickCount,
-    Boolean(dispatchError),
-  );
-  if (dispatchError && !completed) throw dispatchError;
 }
 
 /**
@@ -226,7 +225,13 @@ export async function dragMouse(
 }
 
 function inputEventDelay(ms = INPUT_EVENT_DELAY_MS) {
+  if (!(ms > 0)) return Promise.resolve();
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function recoverTimedOutClick(point: Point, clickCount: number) {
+  const probeId = await installClickProbe(point);
+  return finishClickProbe(point, probeId, clickCount);
 }
 
 async function installClickProbe(point: Point) {
@@ -264,13 +269,11 @@ async function finishClickProbe(
   point: Point,
   id: string | null,
   clickCount: number,
-  settle: boolean,
 ) {
   if (!id) return false;
-  // The renderer dispatches the click before it acknowledges the mouse input,
-  // so the probe is already decided once dispatch returned. Only a timed-out
-  // dispatch needs a settle before the page is asked whether input arrived.
-  if (settle) await inputEventDelay(50);
+  // The probe is installed after a dispatch timeout, so give a late trusted
+  // click a moment to land before the page is asked whether input arrived.
+  await inputEventDelay(50);
   try {
     const result = await cdp(
       "Runtime.evaluate",

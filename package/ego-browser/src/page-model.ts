@@ -611,7 +611,10 @@ const PAGE_CLOSE_CONFIRM_INTERVAL_MS = 50;
 const CREATED_SPACE_TAB_TIMEOUT_MS = 2_000;
 const CREATED_SPACE_TAB_POLL_INTERVAL_MS = 50;
 const DEFAULT_PAGE_ACTION_TIMEOUT_MS = 3_000;
-const PAGE_ACTION_RESOLUTION_RETRY_MS = 500;
+// A blocked target (hidden, disabled, covered) is re-examined at this cadence
+// until the action timeout; a short interval lets an element that becomes
+// actionable a few frames later be clicked without waiting most of a second.
+const PAGE_ACTION_RESOLUTION_RETRY_MS = 50;
 // A missing action target stops being retried once the page has shown no DOM
 // mutation and no network activity for this long; a page that is still
 // loading or rendering keeps the full action timeout.
