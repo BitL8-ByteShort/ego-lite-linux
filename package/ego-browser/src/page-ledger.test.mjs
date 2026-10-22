@@ -11,7 +11,11 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { PageLedgerStore, runtimeInstanceId } from "../dist/src/page-ledger.js";
+import {
+  PageLedgerStore,
+  renameWithRetry,
+  runtimeInstanceId,
+} from "../dist/src/page-ledger.js";
 
 test("runtimeInstanceId is a pure browser-host identifier", () => {
   const first = runtimeInstanceId(42);
@@ -340,6 +344,133 @@ test("writes use a complete atomic ledger document", async () => {
         },
       },
     });
+  });
+});
+
+function sharingViolation(code = "EPERM") {
+  const error = new Error(`${code}: operation not permitted, rename`);
+  error.code = code;
+  return error;
+}
+
+test("renameWithRetry retries transient Windows sharing violations with backoff", async () => {
+  const calls = [];
+  const delays = [];
+  let failures = 3;
+  await renameWithRetry("from", "to", {
+    rename: async (from, to) => {
+      calls.push([from, to]);
+      if (failures-- > 0)
+        throw sharingViolation(["EPERM", "EACCES", "EBUSY"][failures]);
+    },
+    sleep: async (ms) => {
+      delays.push(ms);
+    },
+  });
+
+  assert.equal(calls.length, 4);
+  assert.deepEqual(calls[0], ["from", "to"]);
+  assert.deepEqual(delays, [20, 40, 80]);
+});
+
+test("renameWithRetry does not retry non-transient errors", async () => {
+  let calls = 0;
+  await assert.rejects(
+    renameWithRetry("from", "to", {
+      rename: async () => {
+        calls += 1;
+        throw sharingViolation("ENOENT");
+      },
+      sleep: async () => {
+        assert.fail("must not sleep");
+      },
+    }),
+    { code: "ENOENT" },
+  );
+  assert.equal(calls, 1);
+});
+
+test("renameWithRetry gives up after the attempt budget", async () => {
+  let calls = 0;
+  const delays = [];
+  await assert.rejects(
+    renameWithRetry("from", "to", {
+      rename: async () => {
+        calls += 1;
+        throw sharingViolation();
+      },
+      sleep: async (ms) => {
+        delays.push(ms);
+      },
+      attempts: 4,
+    }),
+    { code: "EPERM" },
+  );
+  assert.equal(calls, 5);
+  assert.deepEqual(delays, [20, 40, 80, 160]);
+});
+
+test("renameWithRetry caps the delay between attempts", async () => {
+  let failures = 6;
+  const delays = [];
+  await renameWithRetry("from", "to", {
+    rename: async () => {
+      if (failures-- > 0) throw sharingViolation();
+    },
+    sleep: async (ms) => {
+      delays.push(ms);
+    },
+  });
+  assert.deepEqual(delays, [20, 40, 80, 160, 250, 250]);
+});
+
+test("a ledger write survives a transient EPERM on the final rename", async () => {
+  await withTempLedger(async (rootDir) => {
+    const { rename } = await import("node:fs/promises");
+    let failures = 2;
+    let renames = 0;
+    const store = new PageLedgerStore({
+      rootDir,
+      rename: {
+        rename: async (from, to) => {
+          renames += 1;
+          if (failures-- > 0) throw sharingViolation();
+          await rename(from, to);
+        },
+        sleep: async () => {},
+      },
+    });
+    await store.addPage(5, "target-a");
+    const page = await store.addPage(5, "target-b");
+
+    assert.equal(page.label, "p2");
+    // Two writes: the first needed three attempts, the second one.
+    assert.equal(renames, 4);
+    const parsed = JSON.parse(
+      await readFile(join(rootDir, "space-5.json"), "utf8"),
+    );
+    assert.deepEqual(Object.keys(parsed.pages), ["p1", "p2"]);
+    assert.deepEqual(
+      (await readdir(rootDir)).filter((name) => name.endsWith(".tmp")),
+      [],
+    );
+  });
+});
+
+test("a persistent EPERM on the final rename still surfaces and leaves no temporary file", async () => {
+  await withTempLedger(async (rootDir) => {
+    const store = new PageLedgerStore({
+      rootDir,
+      rename: {
+        rename: async () => {
+          throw sharingViolation();
+        },
+        sleep: async () => {},
+        attempts: 2,
+      },
+    });
+    await assert.rejects(store.addPage(5, "target-a"), { code: "EPERM" });
+    assert.deepEqual(await readdir(rootDir), []);
   });
 });
 
