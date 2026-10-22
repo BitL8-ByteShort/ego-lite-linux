@@ -174,18 +174,47 @@ function withFakeEgo(run) {
   });
 }
 
-test("click dispatches native input without a page-side probe when the renderer acknowledges it", async () => {
+function methodSequence(calls) {
+  return calls.map((call) =>
+    call.method === "Input.dispatchMouseEvent"
+      ? `${call.method}:${call.params.type}`
+      : call.method,
+  );
+}
+
+function isProbeExpression(call) {
+  return Boolean(call.params.expression?.includes("__egoBrowserInputProbes"));
+}
+
+/**
+ * CDP double for a v1 click on a CSS selector with native bindings: the
+ * resolving evaluate returns the center, a probe read answers `probeResult`,
+ * and native input either succeeds or times out.
+ */
+function clickOverride({ inputTimesOut = false, probeResult } = {}) {
   const calls = [];
   const restore = setOverrides({
     cdpOverride(method, params) {
       calls.push({ method, params });
       if (method === "Runtime.evaluate") {
-        // Element resolution (buildSelectorCenterJs) — return center point
+        if (params.expression.includes("probe.dispose();\n        delete")) {
+          // finishClickProbe
+          return { result: { value: probeResult } };
+        }
+        // Resolution (buildSelectorCenterJs) plus the probe install
         return { result: { value: { x: 100, y: 200 } } };
+      }
+      if (method === "Input.dispatchMouseEvent" && inputTimesOut) {
+        throw new Error("CDP request timed out: Input.dispatchMouseEvent");
       }
       return {};
     },
   });
+  return { calls, restore };
+}
+
+test("click resolves a CSS selector and installs its probe in one page call, then never reads it back", async () => {
+  const { calls, restore } = clickOverride();
   try {
     await withFakeEgo(() => click("#target"));
   } finally {
@@ -193,107 +222,139 @@ test("click dispatches native input without a page-side probe when the renderer 
   }
 
   assert.deepEqual(
-    calls.map((call) =>
-      call.method === "Input.dispatchMouseEvent"
-        ? `${call.method}:${call.params.type}`
-        : call.method,
-    ),
+    methodSequence(calls),
     [
       "Runtime.evaluate",
       "Input.dispatchMouseEvent:mouseMoved",
       "Input.dispatchMouseEvent:mousePressed",
       "Input.dispatchMouseEvent:mouseReleased",
     ],
-    "a normal click is element resolution plus three native input events",
+    "a normal click is one resolving page call plus three native input events",
   );
-  assert.equal(
-    calls.some((call) =>
-      call.params.expression?.includes("__egoBrowserInputProbes"),
-    ),
-    false,
-    "the normal path never installs or reads a click probe",
+  assert.match(
+    calls[0].params.expression,
+    /querySelector|document\./,
+    "the single page call resolves the selector",
+  );
+  assert.match(
+    calls[0].params.expression,
+    /addEventListener\("click", probe\.handler, true\)/,
+    "the same page call installs the trusted-click probe before any input",
+  );
+  assert.match(
+    calls[0].params.expression,
+    /setTimeout\(\(\) => \{\s*probe\.dispose\(\);/,
+    "the probe removes itself so an acknowledged click never reads it back",
+  );
+  assert.deepEqual(
+    calls.slice(1).map((call) => [call.params.x, call.params.y]),
+    [
+      [100, 200],
+      [100, 200],
+      [100, 200],
+    ],
   );
 });
 
-test("click probes for the trusted click and falls back to synthetic events only after a dispatch timeout", async () => {
-  const calls = [];
-  const probeExpressions = [];
-  const restore = setOverrides({
-    cdpOverride(method, params) {
-      calls.push({ method, params });
-      if (method === "Runtime.evaluate") {
-        if (params.expression?.includes("__egoBrowserInputProbes")) {
-          probeExpressions.push(params.expression);
-          if (probeExpressions.length === 1) {
-            // installClickProbe — elementFromPoint returns truthy
-            return { result: { value: true } };
-          }
-          // finishClickProbe — the trusted click never arrived
-          return { result: { value: { seen: false, fallback: true } } };
-        }
-        return { result: { value: { x: 100, y: 200 } } };
-      }
-      if (method === "Input.dispatchMouseEvent") {
-        // Simulate CDP timeout — the browser couldn't dispatch the event
-        throw new Error("CDP request timed out: Input.dispatchMouseEvent");
-      }
-      return {};
-    },
+test("click installs the probe before input for coordinate targets and skips the read-back", async () => {
+  const { calls, restore } = clickOverride();
+  try {
+    await withFakeEgo(() => click([30, 40]));
+  } finally {
+    restore();
+  }
+
+  assert.deepEqual(methodSequence(calls), [
+    "Runtime.evaluate",
+    "Input.dispatchMouseEvent:mouseMoved",
+    "Input.dispatchMouseEvent:mousePressed",
+    "Input.dispatchMouseEvent:mouseReleased",
+  ]);
+  assert(isProbeExpression(calls[0]), "the probe is installed before input");
+  assert.match(calls[0].params.expression, /\{"x":30,"y":40\}/);
+});
+
+test("click reads the probe and falls back to synthetic events only after a dispatch timeout", async () => {
+  const { calls, restore } = clickOverride({
+    inputTimesOut: true,
+    probeResult: { seen: false, fallback: true },
   });
   try {
-    // Should NOT throw — timeout is absorbed because fallback succeeded
+    // Does not throw: the fallback reached the element.
     await withFakeEgo(() => click("#target"));
   } finally {
     restore();
   }
 
+  assert.deepEqual(methodSequence(calls), [
+    "Runtime.evaluate",
+    "Input.dispatchMouseEvent:mouseMoved",
+    "Runtime.evaluate",
+  ]);
+  assert(isProbeExpression(calls[0]), "the probe was installed before input");
+  const finish = calls[2].params.expression;
+  assert.match(finish, /probe\.dispose\(\)/);
+  assert.match(finish, /if \(probe\.seen \|\| !probe\.target\) return/);
+  assert.match(finish, /dispatchEvent\(new MouseEvent\("click"/);
+});
+
+test("click treats a trusted click that landed before the dispatch timeout as delivered", async () => {
+  // The renderer can deliver the event and still miss the CDP deadline. The
+  // probe installed before dispatch has seen the click, so no synthetic click
+  // is replayed and the timeout is absorbed.
+  const { calls, restore } = clickOverride({
+    inputTimesOut: true,
+    probeResult: { seen: true, fallback: false },
+  });
+  try {
+    await withFakeEgo(() => click("#target"));
+  } finally {
+    restore();
+  }
+
+  assert.deepEqual(methodSequence(calls), [
+    "Runtime.evaluate",
+    "Input.dispatchMouseEvent:mouseMoved",
+    "Runtime.evaluate",
+  ]);
   assert.equal(
-    probeExpressions.length,
+    calls.filter(isProbeExpression).length,
     2,
-    "the probe is installed and read once each after the timeout",
-  );
-  const firstInput = calls.findIndex(
-    (call) => call.method === "Input.dispatchMouseEvent",
-  );
-  const probeInstall = calls.findIndex((call) =>
-    call.params.expression?.includes("__egoBrowserInputProbes"),
-  );
-  assert(
-    firstInput >= 0 && probeInstall > firstInput,
-    "the probe is installed only after native input timed out",
-  );
-  assert.match(
-    probeExpressions[1],
-    /dispatchEvent/,
-    "finish expression contains fallback mouse events",
-  );
-  assert.match(
-    probeExpressions[1],
-    /MouseEvent/,
-    "finish expression dispatches MouseEvent in fallback",
+    "the probe is installed once before input and read once after the timeout",
   );
 });
 
-test("click rethrows a dispatch timeout when the fallback finds no element", async () => {
-  const restore = setOverrides({
-    cdpOverride(method, params) {
-      if (method === "Runtime.evaluate") {
-        if (params.expression?.includes("__egoBrowserInputProbes")) {
-          // installClickProbe — nothing under the point
-          return { result: { value: false } };
-        }
-        return { result: { value: { x: 100, y: 200 } } };
-      }
-      if (method === "Input.dispatchMouseEvent") {
-        throw new Error("CDP request timed out: Input.dispatchMouseEvent");
-      }
-      return {};
-    },
+test("click rethrows a dispatch timeout when the probe has no element to fall back to", async () => {
+  const { restore } = clickOverride({
+    inputTimesOut: true,
+    probeResult: { seen: false, fallback: false },
   });
   try {
     await assert.rejects(
       () => withFakeEgo(() => click("#target")),
       /CDP request timed out: Input\.dispatchMouseEvent/,
+    );
+  } finally {
+    restore();
+  }
+});
+
+test("click reports a missing CSS selector as a transient resolution error", async () => {
+  const restore = setOverrides({
+    cdpOverride(method) {
+      if (method === "Runtime.evaluate") return { result: { value: null } };
+      return {};
+    },
+  });
+  try {
+    await assert.rejects(
+      () => withFakeEgo(() => click("#missing")),
+      (error) => {
+        assert.equal(error.name, "ElementResolutionError");
+        assert.equal(error.kind, "transient");
+        assert.equal(error.message, "Element not found: #missing");
+        return true;
+      },
     );
   } finally {
     restore();

@@ -1,5 +1,10 @@
 import { cdp, js } from "../cdp-eval.js";
 import { browserCdp } from "../browser-runtime.js";
+import {
+  ElementResolutionError,
+  buildSelectorCenterJs,
+  isRawSelector,
+} from "../element-resolver.js";
 import { elementCenter } from "./observe.js";
 import { resolveAndCall } from "./element-ops.js";
 
@@ -67,6 +72,11 @@ type MouseEventOptions = Record<string, unknown>;
 // the pointer-driven drags keep their caller-chosen pauses.
 const INPUT_EVENT_DELAY_MS = 0;
 const INPUT_DISPATCH_TIMEOUT_MS = 1000;
+// A click probe is only read back after a dispatch timeout; an acknowledged
+// click leaves it to remove itself.
+const CLICK_PROBE_TTL_MS = 5_000;
+
+type ClickTarget = Point & { probeId: string | null };
 
 /**
  * Mouse target accepted by mouse helpers.
@@ -88,7 +98,7 @@ const INPUT_DISPATCH_TIMEOUT_MS = 1000;
  * @returns {Promise<void>}
  */
 export async function click(target: MouseTarget, options: ClickOptions = {}) {
-  const point = await resolveMouseTarget(target);
+  const { probeId, ...point } = await resolveClickTarget(target);
   const button = options.button || "left";
   const buttons = pressedButtons(button);
   const clickCount = options.clickCount ?? options.clicks ?? 1;
@@ -112,11 +122,12 @@ export async function click(target: MouseTarget, options: ClickOptions = {}) {
     });
   } catch (error) {
     if (!isInputDispatchTimeout(error)) throw error;
-    // The renderer did not acknowledge native input in time (typically an
-    // occluded or hidden window). Only this path pays for the page-side
-    // probe: it waits briefly for the trusted click to land and otherwise
-    // dispatches synthetic mouse events to the element under the point.
-    const completed = await recoverTimedOutClick(point, clickCount);
+    // The renderer did not acknowledge the input in time (typically an
+    // occluded window). A timeout does not prove the event was dropped, so
+    // the probe installed before dispatch decides: a trusted click that
+    // already reached the target counts as delivered; otherwise synthetic
+    // mouse events go to the element under the point.
+    const completed = await finishClickProbe(point, probeId, clickCount);
     if (!completed) throw error;
   }
 }
@@ -229,30 +240,102 @@ function inputEventDelay(ms = INPUT_EVENT_DELAY_MS) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function recoverTimedOutClick(point: Point, clickCount: number) {
-  const probeId = await installClickProbe(point);
-  return finishClickProbe(point, probeId, clickCount);
+/**
+ * Resolve the click point and install the trusted-click probe before any
+ * input is dispatched. A plain CSS selector does both in the one
+ * `Runtime.evaluate` that already resolves it; refs, locators, offsets, and
+ * coordinates resolve first and install the probe in a call of their own
+ * rather than risk a replayed click. Without native bindings there is no
+ * fallback, so no probe is installed.
+ */
+async function resolveClickTarget(target: MouseTarget): Promise<ClickTarget> {
+  if (typeof target === "string" && canProbeInputFallback()) {
+    const point = await resolveRawSelectorClickTarget(target);
+    if (point) return point;
+  }
+  const point = await resolveMouseTarget(target);
+  return { ...point, probeId: await installClickProbe(point) };
+}
+
+async function resolveRawSelectorClickTarget(
+  selector: string,
+): Promise<ClickTarget | null> {
+  if (!isRawSelector(selector)) return null;
+  const id = newProbeId("click");
+  const expression = `(() => {
+    const center = ${buildSelectorCenterJs(selector)};
+    if (!center) return null;
+    ${clickProbeInstallJs(id, "center")}
+    return { x: center.x, y: center.y };
+  })()`;
+  const result = await cdp("Runtime.evaluate", {
+    expression,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  // An invalid selector or an unexpected value is reported by the shared
+  // resolver, which evaluates the same selector again.
+  if (result.exceptionDetails) return null;
+  const value = result.result?.value;
+  if (value === null) {
+    throw new ElementResolutionError(
+      `Element not found: ${selector}`,
+      "transient",
+    );
+  }
+  if (typeof value?.x !== "number" || typeof value?.y !== "number") {
+    return null;
+  }
+  return { x: value.x, y: value.y, sessionId: undefined, probeId: id };
+}
+
+function newProbeId(kind: string) {
+  return `${kind}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+/**
+ * Page-side click probe: remembers the element under `pointExpression` and
+ * whether a trusted click reached it. The listener removes itself on the
+ * first matching click, and the whole probe removes itself after
+ * CLICK_PROBE_TTL_MS so an acknowledged click never has to read it back.
+ */
+function clickProbeInstallJs(id: string, pointExpression: string) {
+  return `
+    const probePoint = ${pointExpression};
+    window.__egoBrowserInputProbes ||= {};
+    const probe = { seen: false, target: document.elementFromPoint(probePoint.x, probePoint.y) };
+    probe.dispose = () => {
+      document.removeEventListener("click", probe.handler, true);
+      clearTimeout(probe.timer);
+    };
+    probe.handler = (event) => {
+      if (
+        event.isTrusted && probe.target &&
+        (event.target === probe.target || probe.target.contains(event.target))
+      ) {
+        probe.seen = true;
+        probe.dispose();
+      }
+    };
+    probe.timer = setTimeout(() => {
+      probe.dispose();
+      delete window.__egoBrowserInputProbes[${JSON.stringify(id)}];
+    }, ${JSON.stringify(CLICK_PROBE_TTL_MS)});
+    document.addEventListener("click", probe.handler, true);
+    window.__egoBrowserInputProbes[${JSON.stringify(id)}] = probe;
+  `;
 }
 
 async function installClickProbe(point: Point) {
   if (!canProbeInputFallback()) return null;
-  const id = `click_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const id = newProbeId("click");
   try {
     const result = await cdp(
       "Runtime.evaluate",
       {
         expression: `(() => {
-        const target = document.elementFromPoint(${JSON.stringify(point.x)}, ${JSON.stringify(point.y)});
-        window.__egoBrowserInputProbes ||= {};
-        const probe = { seen: false, target };
-        probe.handler = (event) => {
-          if (event.isTrusted && target && (event.target === target || target.contains(event.target))) {
-            probe.seen = true;
-          }
-        };
-        document.addEventListener("click", probe.handler, true);
-        window.__egoBrowserInputProbes[${JSON.stringify(id)}] = probe;
-        return Boolean(target);
+        ${clickProbeInstallJs(id, JSON.stringify({ x: point.x, y: point.y }))}
+        return Boolean(probe.target);
       })()`,
         returnByValue: true,
         awaitPromise: false,
@@ -271,8 +354,8 @@ async function finishClickProbe(
   clickCount: number,
 ) {
   if (!id) return false;
-  // The probe is installed after a dispatch timeout, so give a late trusted
-  // click a moment to land before the page is asked whether input arrived.
+  // Give a trusted click that the renderer is still delivering a moment to
+  // land before the page is asked whether input arrived.
   await inputEventDelay(50);
   try {
     const result = await cdp(
@@ -282,7 +365,7 @@ async function finishClickProbe(
         const probes = window.__egoBrowserInputProbes || {};
         const probe = probes[${JSON.stringify(id)}];
         if (!probe) return { seen: false, fallback: false };
-        document.removeEventListener("click", probe.handler, true);
+        probe.dispose();
         delete probes[${JSON.stringify(id)}];
         if (probe.seen || !probe.target) return { seen: probe.seen, fallback: false };
         const target = probe.target;
