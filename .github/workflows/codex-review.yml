@@ -21,9 +21,12 @@ jobs:
   review:
     # Skip draft PRs. Skip bot PRs (Dependabot etc.) too: codex-action's
     # write-access check rejects non-write triggers, so the run would fail anyway.
+    # Skip fork PRs: GitHub withholds repository secrets from them, so the
+    # review cannot run.
     if: >-
       ${{ github.event.pull_request.draft == false
-      && github.event.pull_request.user.type != 'Bot' }}
+      && github.event.pull_request.user.type != 'Bot'
+      && github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -51,6 +54,9 @@ jobs:
           # commits, so changes to the instruction files are still reviewed.
           for f in AGENTS.md CLAUDE.md; do
             if git cat-file -e "$BASE_SHA:$f" 2>/dev/null; then
+              # Remove first: the PR could have turned the path into a symlink,
+              # and the redirection would follow it to another file.
+              rm -f "$f"
               git show "$BASE_SHA:$f" > "$f"
               echo "Restored $f from base"
             elif [ -e "$f" ]; then
