@@ -69,6 +69,10 @@ import { pageApiAlignmentCase } from "./page-api-alignment.mjs";
 import { pageActionabilityCase } from "./page-actionability.mjs";
 import { pageEvaluateTimeoutCase } from "./page-evaluate-timeout.mjs";
 import {
+  pagePendingNavigationCase,
+  pagePendingNavigationFreshProcessCase,
+} from "./page-pending-navigation.mjs";
+import {
   pageDelayedPopupResumeCase,
   pageDelayedPopupScheduleCase,
 } from "./page-delayed-popup.mjs";
@@ -223,6 +227,16 @@ export const e2eCases = [
   {
     name: "Page evaluate timeout recovery",
     body: pageEvaluateTimeoutCase,
+    timeoutMs: 60_000,
+  },
+  {
+    name: "Page pending navigation: same process",
+    body: pagePendingNavigationCase,
+    timeoutMs: 60_000,
+  },
+  {
+    name: "Page pending navigation: fresh process",
+    body: pagePendingNavigationFreshProcessCase,
     timeoutMs: 60_000,
   },
   {

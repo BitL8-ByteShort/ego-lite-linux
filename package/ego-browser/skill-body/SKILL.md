@@ -220,6 +220,14 @@ ego-browser provides the following Page API:
 or Node.js modules from the surrounding script. Define browser-side helpers
 inside the callback or pass one JSON-serializable value as its second argument.
 
+`goto()` and `reload()` count session setup against their `timeout`. While a
+main-frame navigation has started but not committed, or when a renderer hangs,
+the Page answers no renderer command; `snapshot()` and ref actions on it fail
+with `EGO_PAGE_UNRESPONSIVE` after one bounded wait, naming the Page and its
+last committed URL. Retry once the navigation commits, call `goto()` again with
+a longer `timeout`, stop the pending navigation with
+`page.cdp("Page.stopLoading")`, or continue on a new Page.
+
 Work efficiently:
 
 - Each time you observe, collect only the cheapest page state sufficient to

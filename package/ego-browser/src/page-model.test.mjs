@@ -12,7 +12,10 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { NativeOperationGate } from "../dist/src/native-gate.js";
-import { CdpRequestTimeoutError } from "../dist/src/browser-runtime.js";
+import {
+  CdpRequestTimeoutError,
+  PageUnresponsiveError,
+} from "../dist/src/browser-runtime.js";
 import { PageLedgerStore } from "../dist/src/page-ledger.js";
 import {
   captureTaskSpaceUserBoundary,
@@ -6980,6 +6983,35 @@ test("a click that reaches a file input waits for the trailing chooser event", a
       fixture.sleepDurations.slice(-1),
       [1_000],
       "a confirmed file-input click waits for the chooser rather than a blind settle",
+    );
+  });
+});
+
+test("snapshot names the Page and the next step when the Page does not answer", async () => {
+  await withFixture(async (fixture) => {
+    const task = taskForRound(fixture, "round-a", {
+      async ensureFrameSessions() {
+        throw new PageUnresponsiveError("Page.getFrameTree", 1_500, "target-1");
+      },
+    });
+    const page = await openTestPage(task, "https://example.test/pending");
+
+    await assert.rejects(
+      () => page.snapshot(),
+      (error) => {
+        assert.equal(error.code, "EGO_PAGE_UNRESPONSIVE");
+        assert.equal(error.method, "Page.getFrameTree");
+        assert.equal(error.waitedMs, 1_500);
+        assert.equal(error.targetId, "target-1");
+        assert.match(
+          error.message,
+          /^Page p1 .*did not answer Page\.getFrameTree within 1500ms\./,
+        );
+        assert.match(error.message, /navigation has started but not committed/);
+        assert.match(error.message, /page\.cdp\("Page\.stopLoading"\)/);
+        assert.match(error.message, /task\.newPage\(\)/);
+        return true;
+      },
     );
   });
 });

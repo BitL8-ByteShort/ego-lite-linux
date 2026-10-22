@@ -377,13 +377,7 @@ export async function clickInPage(
       }
     }
   } finally {
-    await services
-      .cdp(
-        "Runtime.releaseObject",
-        { objectId: target.objectId },
-        target.sessionId,
-      )
-      .catch(() => {});
+    await releaseObject(services, target.sessionId, target.objectId);
   }
 }
 
@@ -1948,7 +1942,11 @@ async function releaseObject(
   sessionId: string,
   objectId: string,
 ): Promise<void> {
-  await services
+  // Best-effort and not awaited: the action already finished with the handle.
+  // When the action started a navigation, the Page answers nothing until the
+  // new document commits, and waiting here would add a transport timeout to
+  // every click on a link.
+  void services
     .cdp("Runtime.releaseObject", { objectId }, sessionId)
     .catch(() => {});
 }
