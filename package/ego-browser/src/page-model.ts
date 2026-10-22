@@ -10,6 +10,8 @@ import {
   ensureFrameSessions,
   invalidateSession,
   isCdpRequestTimeoutError,
+  isPageUnresponsiveError,
+  PageUnresponsiveError,
   isBrowserRuntime,
   isPageDialogOpenedError,
   isSessionLostError,
@@ -89,6 +91,7 @@ import {
   withPage as defaultWithPage,
   withSpace as defaultWithSpace,
   type PageExecutionContext,
+  type WithPageOptions,
 } from "./native-gate.js";
 import {
   PageLedgerStore,
@@ -436,6 +439,7 @@ type OperationGate = {
   withPage<T>(
     page: PageTarget,
     operation: (context: PageExecutionContext) => T | Promise<T>,
+    options?: WithPageOptions,
   ): Promise<T>;
 };
 
@@ -526,7 +530,7 @@ type PageModelServices = {
     lastActivityAt: number;
     pendingRequests?: string[];
   };
-  ensureSession(targetId: string): Promise<string>;
+  ensureSession(targetId: string, timeoutMs?: number): Promise<string>;
   ensureFrameSessions(
     targetId: string,
     timeoutMs?: number,
@@ -616,6 +620,7 @@ const MISSING_TARGET_PROBE_TIMEOUT_MS = 1_000;
 // One page round trip after an action orders a popup's Target.targetCreated
 // event ahead of the response, so no settle delay is needed.
 const POPUP_SYNC_TIMEOUT_MS = 1_000;
+const PAGE_UNRESPONSIVE_URL_TIMEOUT_MS = 1_000;
 // The native tab list can lag the CDP target event by a few milliseconds.
 const POPUP_TAB_LIST_RETRIES = 10;
 const POPUP_TAB_LIST_RETRY_MS = 20;
@@ -1818,6 +1823,7 @@ class Page {
     const timeoutMs = options.timeout ?? 15_000;
     const waitUntil = options.waitUntil ?? "load";
     const page = await this.#resolve();
+    const deadline = this.#services.now() + timeoutMs;
     const { receipt } = await this.#runActionBoundary(
       page,
       async (sessionId) => {
@@ -1825,9 +1831,10 @@ class Page {
           referer: options.referer,
           timeoutMs,
           waitUntil,
+          deadline,
         });
       },
-      { inputAction: false },
+      { inputAction: false, sessionTimeoutMs: timeoutMs },
     );
     return receipt;
   }
@@ -1837,15 +1844,17 @@ class Page {
     const timeoutMs = options.timeout ?? 15_000;
     const waitUntil = options.waitUntil ?? "load";
     const page = await this.#resolve();
+    const deadline = this.#services.now() + timeoutMs;
     const { receipt } = await this.#runActionBoundary(
       page,
       async (sessionId) => {
         await reloadInPage(this.#services, sessionId, {
           timeoutMs,
           waitUntil,
+          deadline,
         });
       },
-      { inputAction: false },
+      { inputAction: false, sessionTimeoutMs: timeoutMs },
     );
     return receipt;
   }
@@ -1914,7 +1923,7 @@ class Page {
       });
       const iframeSessions =
         Array.isArray(result?.refs) && result.refs.length > 0
-          ? await this.#services.ensureFrameSessions(page.targetId)
+          ? await this.#frameSessions(page)
           : new Map<string, string>();
       await preparePageSnapshotResult(
         this.#services,
@@ -2360,8 +2369,7 @@ class Page {
         refMap,
         selector,
         options,
-        (timeoutMs) =>
-          this.#services.ensureFrameSessions(page.targetId, timeoutMs),
+        (timeoutMs) => this.#frameSessions(page, timeoutMs),
       );
     });
   }
@@ -2818,8 +2826,8 @@ class Page {
     ...selectors: string[]
   ): Promise<{ refMap: RefMap; iframeSessions: Map<string, string> }> {
     const refMap = await this.#refMapForAction(page, sessionId, ...selectors);
-    const iframeSessions = await this.#services.ensureFrameSessions(
-      page.targetId,
+    const iframeSessions = await this.#frameSessions(
+      page,
       Math.max(1, remainingMs),
     );
     return { refMap, iframeSessions };
@@ -3044,7 +3052,12 @@ class Page {
       // Navigation already waits on page lifecycle; only input actions need
       // the ordering round trip to see a popup created by the input itself.
       inputAction = true,
-    }: { guardFileChooser?: boolean; inputAction?: boolean } = {},
+      sessionTimeoutMs,
+    }: {
+      guardFileChooser?: boolean;
+      inputAction?: boolean;
+      sessionTimeoutMs?: number;
+    } = {},
   ): Promise<{ value: T; receipt: PageActionReceipt }> {
     const explicitDownload = this.#pendingDownload;
     const armedDownload = explicitDownload
@@ -3062,80 +3075,84 @@ class Page {
         throw new Error("file chooser waiter belongs to a different Page");
       }
     }
-    return this.#services.gate.withPage(page, async ({ sessionId }) => {
-      await this.#activate(page.targetId);
-      await armedDownload?.interception.ready(sessionId);
-      const fileChooserGuard =
-        guardFileChooser && !explicitFileChooser
-          ? this.#services.prepareFileChooser(sessionId, {
-              timeoutMs: 1_000,
-              cancel: true,
-            })
-          : undefined;
-      const popupWatch = await this.#watchPopups(inputAction);
-      try {
-        await fileChooserGuard?.ready;
-        const fileInputProbe = fileChooserGuard
-          ? await this.#installFileInputProbe(sessionId)
-          : false;
-        let actionError: unknown;
-        let value: T | undefined;
+    return this.#services.gate.withPage(
+      page,
+      async ({ sessionId }) => {
+        await this.#activate(page.targetId);
+        await armedDownload?.interception.ready(sessionId);
+        const fileChooserGuard =
+          guardFileChooser && !explicitFileChooser
+            ? this.#services.prepareFileChooser(sessionId, {
+                timeoutMs: 1_000,
+                cancel: true,
+              })
+            : undefined;
+        const popupWatch = await this.#watchPopups(inputAction);
         try {
-          value = await operation(sessionId);
-        } catch (error) {
-          actionError = error;
-        }
-
-        if (isPageDialogOpenedError(actionError)) {
-          const dialog =
-            this.#services.pendingDialog(sessionId) || actionError.dialog;
-          return {
-            value: undefined as T,
-            receipt: { dialog },
-          };
-        }
-
-        if (!inputAction) {
-          await this.#services.sleep(NAVIGATION_FRAME_SETTLE_MS);
-        }
-        let popupError: unknown;
-        let popups: PopupReceiptEntry[] = [];
-        try {
-          popups = await popupWatch.collect(sessionId);
-        } catch (error) {
-          popupError = error;
-        }
-
-        if (fileChooserGuard && !fileChooserGuard.peek()) {
-          const clickedFileInput = fileInputProbe
-            ? await this.#readFileInputProbe(sessionId)
-            : null;
-          if (clickedFileInput !== false) {
-            await Promise.race([
-              fileChooserGuard.event.catch(() => {}),
-              this.#services.sleep(
-                clickedFileInput
-                  ? FILE_CHOOSER_OPEN_WAIT_MS
-                  : FILE_CHOOSER_SETTLE_MS,
-              ),
-            ]);
+          await fileChooserGuard?.ready;
+          const fileInputProbe = fileChooserGuard
+            ? await this.#installFileInputProbe(sessionId)
+            : false;
+          let actionError: unknown;
+          let value: T | undefined;
+          try {
+            value = await operation(sessionId);
+          } catch (error) {
+            actionError = error;
           }
-        }
-        if (fileChooserGuard?.peek()) {
-          throw unhandledFileChooserError();
-        }
 
-        if (actionError) throw actionError;
-        if (popupError) throw popupError;
-        return {
-          value: value as T,
-          receipt: popups.length > 0 ? { popups } : {},
-        };
-      } finally {
-        popupWatch.dispose();
-        await fileChooserGuard?.dispose();
-      }
-    });
+          if (isPageDialogOpenedError(actionError)) {
+            const dialog =
+              this.#services.pendingDialog(sessionId) || actionError.dialog;
+            return {
+              value: undefined as T,
+              receipt: { dialog },
+            };
+          }
+
+          if (!inputAction) {
+            await this.#services.sleep(NAVIGATION_FRAME_SETTLE_MS);
+          }
+          let popupError: unknown;
+          let popups: PopupReceiptEntry[] = [];
+          try {
+            popups = await popupWatch.collect(sessionId);
+          } catch (error) {
+            popupError = error;
+          }
+
+          if (fileChooserGuard && !fileChooserGuard.peek()) {
+            const clickedFileInput = fileInputProbe
+              ? await this.#readFileInputProbe(sessionId)
+              : null;
+            if (clickedFileInput !== false) {
+              await Promise.race([
+                fileChooserGuard.event.catch(() => {}),
+                this.#services.sleep(
+                  clickedFileInput
+                    ? FILE_CHOOSER_OPEN_WAIT_MS
+                    : FILE_CHOOSER_SETTLE_MS,
+                ),
+              ]);
+            }
+          }
+          if (fileChooserGuard?.peek()) {
+            throw unhandledFileChooserError();
+          }
+
+          if (actionError) throw actionError;
+          if (popupError) throw popupError;
+          return {
+            value: value as T,
+            receipt: popups.length > 0 ? { popups } : {},
+          };
+        } finally {
+          popupWatch.dispose();
+          await fileChooserGuard?.dispose();
+        }
+      },
+      { sessionTimeoutMs },
+    );
   }
 
   /**
@@ -3281,6 +3298,61 @@ class Page {
     return popups;
   }
 
+  /**
+   * Frame discovery for this Page. Every call site goes through here so an
+   * unresponsive Page is always reported with its label and recovery steps,
+   * whichever step of an operation first ran into it.
+   */
+  async #frameSessions(
+    page: PageTarget,
+    timeoutMs?: number,
+  ): Promise<Map<string, string>> {
+    try {
+      return await this.#services.ensureFrameSessions(page.targetId, timeoutMs);
+    } catch (error) {
+      if (!isPageUnresponsiveError(error)) throw error;
+      throw await this.#describeUnresponsivePage(error, page);
+    }
+  }
+
+  /**
+   * Replace the runtime's generic "did not answer" error with one that names
+   * this Page and tells the agent what can be done about it. Thrown from here
+   * so the stack shows the public call instead of a transport timer.
+   */
+  async #describeUnresponsivePage(
+    error: PageUnresponsiveError,
+    page: PageTarget,
+  ): Promise<PageUnresponsiveError> {
+    let url: string | undefined;
+    try {
+      // The browser process answers Target.* on its own, so this cannot stall.
+      // Its URL may already show the pending navigation, so do not call it
+      // the committed one.
+      const response = await this.#services.cdp(
+        "Target.getTargetInfo",
+        { targetId: page.targetId },
+        undefined,
+        PAGE_UNRESPONSIVE_URL_TIMEOUT_MS,
+      );
+      const info = response?.result?.targetInfo || response?.targetInfo;
+      if (typeof info?.url === "string" && info.url.length > 0) url = info.url;
+    } catch {
+      // The URL is a courtesy; the error stands without it.
+    }
+    const described = new PageUnresponsiveError(
+      error.method,
+      error.waitedMs,
+      page.targetId,
+      error.sessionId,
+    );
+    described.message =
+      `Page ${this.label}${url ? ` (${url})` : ""} did not answer ${error.method} within ${error.waitedMs}ms. ` +
+      "Chromium suspends every renderer command while a main-frame navigation has started but not committed, and a hung renderer behaves the same way. " +
+      'Retry once the pending navigation commits, call page.goto(url, { timeout }) with a longer timeout, stop the pending navigation with page.cdp("Page.stopLoading"), or continue on a new Page from task.newPage().';
+    return described;
+  }
+
   async #refMapForAction(
     page: PageTarget,
     sessionId: string,
@@ -3320,9 +3392,7 @@ class Page {
     page: PageTarget,
     sessionId: string,
   ): Promise<Map<string, string>> {
-    const iframeSessions = await this.#services.ensureFrameSessions(
-      page.targetId,
-    );
+    const iframeSessions = await this.#frameSessions(page);
     const readTree = async (session: string) => {
       const response = await this.#services.cdp(
         "Page.getFrameTree",

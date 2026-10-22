@@ -66,6 +66,11 @@ export type PageNavigationOptions = {
   timeoutMs: number;
   waitUntil: PageGotoWaitUntil;
   referer?: string;
+  /**
+   * Absolute deadline when the public call started before this function,
+   * so session setup counts against the caller's timeout.
+   */
+  deadline?: number;
 };
 
 export type PageWaitForURLOptions = {
@@ -428,7 +433,7 @@ export async function navigateInPage(
   options: PageNavigationOptions,
 ): Promise<void> {
   const { timeoutMs, waitUntil, referer } = options;
-  const deadline = services.now() + timeoutMs;
+  const deadline = options.deadline ?? services.now() + timeoutMs;
   let committed = false;
   let navigation: {
     frameId?: string;
@@ -510,7 +515,7 @@ export async function reloadInPage(
   options: Omit<PageNavigationOptions, "referer">,
 ): Promise<void> {
   const { timeoutMs, waitUntil } = options;
-  const deadline = services.now() + timeoutMs;
+  const deadline = options.deadline ?? services.now() + timeoutMs;
   try {
     const previousFrame = await mainFrame(
       services,

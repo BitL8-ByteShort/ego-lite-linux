@@ -477,6 +477,20 @@ export async function startFixtureServer(taskName) {
       }, delayMs);
       return;
     }
+    if (url.pathname === "/hold-page") {
+      // Hold the whole response so a main-frame navigation to this URL stays
+      // started but not committed until the client stops it or gives up.
+      const holdMs = Number(url.searchParams.get("ms") || 60_000);
+      const timer = setTimeout(() => {
+        res.writeHead(200, { "content-type": "text/html" });
+        res.end(
+          "<!doctype html><html><head><title>held page</title></head>" +
+            '<body><h1 id="held-marker">held document loaded</h1></body></html>',
+        );
+      }, holdMs);
+      req.on("close", () => clearTimeout(timer));
+      return;
+    }
     if (url.pathname === "/streamed-page") {
       const delayMs = Number(url.searchParams.get("ms") || 1000);
       res.writeHead(200, { "content-type": "text/html" });
