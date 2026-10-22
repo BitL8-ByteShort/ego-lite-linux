@@ -1923,7 +1923,7 @@ class Page {
       });
       const iframeSessions =
         Array.isArray(result?.refs) && result.refs.length > 0
-          ? await this.#services.ensureFrameSessions(page.targetId)
+          ? await this.#frameSessions(page)
           : new Map<string, string>();
       await preparePageSnapshotResult(
         this.#services,
@@ -2369,8 +2369,7 @@ class Page {
         refMap,
         selector,
         options,
-        (timeoutMs) =>
-          this.#services.ensureFrameSessions(page.targetId, timeoutMs),
+        (timeoutMs) => this.#frameSessions(page, timeoutMs),
       );
     });
   }
@@ -2827,8 +2826,8 @@ class Page {
     ...selectors: string[]
   ): Promise<{ refMap: RefMap; iframeSessions: Map<string, string> }> {
     const refMap = await this.#refMapForAction(page, sessionId, ...selectors);
-    const iframeSessions = await this.#services.ensureFrameSessions(
-      page.targetId,
+    const iframeSessions = await this.#frameSessions(
+      page,
       Math.max(1, remainingMs),
     );
     return { refMap, iframeSessions };
@@ -3300,6 +3299,23 @@ class Page {
   }
 
   /**
+   * Frame discovery for this Page. Every call site goes through here so an
+   * unresponsive Page is always reported with its label and recovery steps,
+   * whichever step of an operation first ran into it.
+   */
+  async #frameSessions(
+    page: PageTarget,
+    timeoutMs?: number,
+  ): Promise<Map<string, string>> {
+    try {
+      return await this.#services.ensureFrameSessions(page.targetId, timeoutMs);
+    } catch (error) {
+      if (!isPageUnresponsiveError(error)) throw error;
+      throw await this.#describeUnresponsivePage(error, page);
+    }
+  }
+
+  /**
    * Replace the runtime's generic "did not answer" error with one that names
    * this Page and tells the agent what can be done about it. Thrown from here
    * so the stack shows the public call instead of a transport timer.
@@ -3376,13 +3392,7 @@ class Page {
     page: PageTarget,
     sessionId: string,
   ): Promise<Map<string, string>> {
-    let iframeSessions: Map<string, string>;
-    try {
-      iframeSessions = await this.#services.ensureFrameSessions(page.targetId);
-    } catch (error) {
-      if (!isPageUnresponsiveError(error)) throw error;
-      throw await this.#describeUnresponsivePage(error, page);
-    }
+    const iframeSessions = await this.#frameSessions(page);
     const readTree = async (session: string) => {
       const response = await this.#services.cdp(
         "Page.getFrameTree",

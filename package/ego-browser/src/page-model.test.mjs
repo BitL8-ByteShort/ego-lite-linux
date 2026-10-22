@@ -7015,3 +7015,37 @@ test("snapshot names the Page and the next step when the Page does not answer", 
     );
   });
 });
+
+test("snapshot describes a Page that stops answering after the first document check", async () => {
+  await withFixture(async (fixture) => {
+    let calls = 0;
+    const task = taskForRound(fixture, "round-a", {
+      async ensureFrameSessions() {
+        calls += 1;
+        if (calls === 1) return new Map();
+        throw new PageUnresponsiveError("Page.getFrameTree", 800, "target-1");
+      },
+      async snapshot() {
+        return {
+          content: 'button "Go" [ref=1]',
+          refs: [{ refId: 1, backendNodeId: 1, role: "button", name: "Go" }],
+        };
+      },
+    });
+    const page = await openTestPage(task, "https://example.test/late");
+
+    await assert.rejects(
+      () => page.snapshot(),
+      (error) => {
+        assert.equal(error.code, "EGO_PAGE_UNRESPONSIVE");
+        assert.match(
+          error.message,
+          /^Page p1 .*did not answer Page\.getFrameTree within 800ms\./,
+        );
+        assert.match(error.message, /Page\.stopLoading/);
+        return true;
+      },
+    );
+    assert.equal(calls, 2, "the second frame discovery is the one that failed");
+  });
+});
