@@ -10,6 +10,7 @@ import {
 } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import {
   validatePageRefState,
   type PageRefState,
@@ -44,9 +45,56 @@ type PageLedgerStoreOptions = {
   browserInstanceId?: string | (() => string | Promise<string>);
   staleAfterMs?: number;
   now?: () => number;
+  /** Test seam for the final rename of an atomic ledger write. */
+  rename?: RenameWithRetryOptions;
 };
 
 const DEFAULT_STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Windows reports a sharing violation as EPERM/EACCES/EBUSY when a rename
+ * replaces a file that another handle (an antivirus scan, the search indexer,
+ * a concurrent reader) still holds open. The condition clears within
+ * milliseconds, so the replacement is retried briefly instead of aborting
+ * the caller's script.
+ */
+const RETRYABLE_RENAME_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
+const RENAME_RETRY_ATTEMPTS = 10;
+const RENAME_RETRY_BASE_MS = 20;
+const RENAME_RETRY_MAX_MS = 250;
+
+type RenameWithRetryOptions = {
+  rename?: (from: string, to: string) => Promise<void>;
+  sleep?: (ms: number) => Promise<unknown>;
+  attempts?: number;
+};
+
+/** Rename over an existing file, retrying transient sharing violations. */
+export async function renameWithRetry(
+  from: string,
+  to: string,
+  options: RenameWithRetryOptions = {},
+): Promise<void> {
+  const doRename = options.rename || rename;
+  const wait = options.sleep || sleep;
+  const attempts = options.attempts ?? RENAME_RETRY_ATTEMPTS;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await doRename(from, to);
+      return;
+    } catch (error) {
+      if (
+        !RETRYABLE_RENAME_CODES.has((error as { code?: string })?.code ?? "") ||
+        attempt >= attempts
+      ) {
+        throw error;
+      }
+      await wait(
+        Math.min(RENAME_RETRY_BASE_MS * 2 ** attempt, RENAME_RETRY_MAX_MS),
+      );
+    }
+  }
+}
 
 /** Stable across Agent rounds and Node-service restarts in one Ego Lite run. */
 export function runtimeInstanceId(parentPid = process.ppid): string {
@@ -76,6 +124,7 @@ export class PageLedgerStore {
   readonly #browserInstanceId?: string | (() => string | Promise<string>);
   readonly #staleAfterMs: number;
   readonly #now: () => number;
+  readonly #renameOptions: RenameWithRetryOptions;
   #temporarySequence = 0;
   #resolvedBrowserInstanceId?: Promise<string | undefined>;
   #cleanup?: Promise<void>;
@@ -91,6 +140,7 @@ export class PageLedgerStore {
         ? DEFAULT_STALE_AFTER_MS
         : options.staleAfterMs;
     this.#now = options.now || Date.now;
+    this.#renameOptions = options.rename || {};
     if (!Number.isFinite(this.#staleAfterMs) || this.#staleAfterMs < 0) {
       throw new TypeError("staleAfterMs must be a non-negative number");
     }
@@ -460,7 +510,7 @@ export class PageLedgerStore {
         encoding: "utf8",
         mode: 0o600,
       });
-      await rename(temporary, path);
+      await renameWithRetry(temporary, path, this.#renameOptions);
     } finally {
       await rm(temporary, { force: true }).catch(() => {});
     }
