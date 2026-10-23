@@ -1,0 +1,1013 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-23",
+  "kind": "MSI installation and desktop qualification",
+  "codeCommit": "6b1863f48b93697b31d66b703edb904553089fcb",
+  "documentationSourceCommit": "86f6e01",
+  "archive": "ego-lite-linux-0.1.0-dev.0-linux-x64.tar.gz",
+  "archiveSha256": "f007f64fb442f741ad1a7d81239e8416dfa556c1ea0832eff3f2a2a68a6f81de",
+  "checksumVerifiedOnMSI": true,
+  "sdkSha256": "d5825a11f17e37fe5ec39715cd63fa5fe85dbbab3aa837290437602bbb8eb0c6",
+  "installedSdkMatchesE2eSdk": true,
+  "machine": {
+    "model": "MSI GE63 Raider RGB 8RF",
+    "distribution": "Ubuntu 24.04.5 LTS",
+    "architecture": "x86_64",
+    "node": "24.21.0",
+    "browser": "Google Chrome for Testing 156.0.8078.47",
+    "existingSystemChrome": "155.0.8059.39; retained",
+    "pinnedBrowserZipSha256": "e6c94490f0b6b337225aeb2d2a5034858516b7017356980ba94f5176d8774a50"
+  },
+  "installation": {
+    "prefix": "<MSI_HOME>/.local",
+    "desktopEntry": "ego-lite-msi.desktop",
+    "desktopName": "ego lite (Community Linux)",
+    "launchCommand": "<MSI_HOME>/.local/bin/ego-lite-msi",
+    "browserCommand": "<MSI_HOME>/.local/bin/ego-browser-msi",
+    "browserEnvironment": "<MSI_HOME>/.config/ego-lite-linux/msi-browser.env",
+    "normalShellCommandsConfigured": true,
+    "shellFilesBackedUpBeforeAppending": true,
+    "rootChanges": false,
+    "existingBrowserProfilesImported": false,
+    "launcherStartedViaGtkLaunch": true,
+    "visuallyVerifiedViaRustDesk": true
+  },
+  "virtualDesktop": {
+    "backend": "GNOME/X11 on TigerVNC VNC-0, viewed through RustDesk",
+    "display": ":1",
+    "physicalDesktop": false,
+    "fullInstalledSuite": {
+      "expectedCases": 81,
+      "passed": 81,
+      "failed": 0,
+      "skipped": 0,
+      "assertions": 1346,
+      "durationSeconds": 229.8,
+      "caseFilter": null,
+      "cleanupPassed": true,
+      "cases": [
+        {
+          "name": "environment initialization",
+          "status": "pass",
+          "assertions": 24
+        },
+        {
+          "name": "helper surface",
+          "status": "pass",
+          "assertions": 67
+        },
+        {
+          "name": "task spaces and control",
+          "status": "pass",
+          "assertions": 58
+        },
+        {
+          "name": "TaskSpace profile selection",
+          "status": "pass",
+          "assertions": 19
+        },
+        {
+          "name": "v2 cross-space routing",
+          "status": "pass",
+          "assertions": 4
+        },
+        {
+          "name": "navigation helpers",
+          "status": "pass",
+          "assertions": 33
+        },
+        {
+          "name": "observation helpers",
+          "status": "pass",
+          "assertions": 51
+        },
+        {
+          "name": "pointer and scroll helpers",
+          "status": "pass",
+          "assertions": 48
+        },
+        {
+          "name": "keyboard and file helpers",
+          "status": "pass",
+          "assertions": 22
+        },
+        {
+          "name": "keyboard regression",
+          "status": "pass",
+          "assertions": 14
+        },
+        {
+          "name": "wait, fetch, cdp, js, help",
+          "status": "pass",
+          "assertions": 42
+        },
+        {
+          "name": "runtime regression",
+          "status": "pass",
+          "assertions": 20
+        },
+        {
+          "name": "target-scoped event isolation",
+          "status": "pass",
+          "assertions": 4
+        },
+        {
+          "name": "page labels: create",
+          "status": "pass",
+          "assertions": 13
+        },
+        {
+          "name": "page labels: restore and reuse",
+          "status": "pass",
+          "assertions": 14
+        },
+        {
+          "name": "page labels: close and do not reuse",
+          "status": "pass",
+          "assertions": 10
+        },
+        {
+          "name": "page labels: persist before hard stop",
+          "status": "pass",
+          "assertions": 1
+        },
+        {
+          "name": "page labels: restore after hard stop",
+          "status": "pass",
+          "assertions": 3
+        },
+        {
+          "name": "page inventory and budget",
+          "status": "pass",
+          "assertions": 9
+        },
+        {
+          "name": "page adoption and release",
+          "status": "pass",
+          "assertions": 19
+        },
+        {
+          "name": "page basic operations",
+          "status": "pass",
+          "assertions": 53
+        },
+        {
+          "name": "page complex evaluate",
+          "status": "pass",
+          "assertions": 23
+        },
+        {
+          "name": "page fetch",
+          "status": "pass",
+          "assertions": 25
+        },
+        {
+          "name": "page actions and popup adoption",
+          "status": "pass",
+          "assertions": 58
+        },
+        {
+          "name": "Page action popup receipts",
+          "status": "pass",
+          "assertions": 9
+        },
+        {
+          "name": "Page action idle fail-fast",
+          "status": "pass",
+          "assertions": 14
+        },
+        {
+          "name": "Page click hit target",
+          "status": "pass",
+          "assertions": 17
+        },
+        {
+          "name": "Page action motion tolerance",
+          "status": "pass",
+          "assertions": 6
+        },
+        {
+          "name": "Page drag and canvas drawing",
+          "status": "pass",
+          "assertions": 15
+        },
+        {
+          "name": "Page JavaScript dialog handling",
+          "status": "pass",
+          "assertions": 34
+        },
+        {
+          "name": "Page media playback",
+          "status": "pass",
+          "assertions": 17
+        },
+        {
+          "name": "Page scrolled screenshot",
+          "status": "pass",
+          "assertions": 13
+        },
+        {
+          "name": "Page default screenshot path: first run",
+          "status": "pass",
+          "assertions": 9
+        },
+        {
+          "name": "Page default screenshot path: second run",
+          "status": "pass",
+          "assertions": 4
+        },
+        {
+          "name": "Page snapshot locator quality",
+          "status": "pass",
+          "assertions": 4
+        },
+        {
+          "name": "Page snapshot iframe viewport",
+          "status": "pass",
+          "assertions": 13
+        },
+        {
+          "name": "Page snapshot subtree",
+          "status": "pass",
+          "assertions": 46
+        },
+        {
+          "name": "Page auto-scroll past a wheel trap",
+          "status": "pass",
+          "assertions": 10
+        },
+        {
+          "name": "Page snapshot viewport overflow hint",
+          "status": "pass",
+          "assertions": 20
+        },
+        {
+          "name": "Page ref identity across partial snapshots",
+          "status": "pass",
+          "assertions": 14
+        },
+        {
+          "name": "Page refs across rounds: prepare",
+          "status": "pass",
+          "assertions": 5
+        },
+        {
+          "name": "Page refs across rounds: resume",
+          "status": "pass",
+          "assertions": 12
+        },
+        {
+          "name": "Page refs in dialog workflows",
+          "status": "pass",
+          "assertions": 10
+        },
+        {
+          "name": "Page refs after failed actions: prepare",
+          "status": "pass",
+          "assertions": 8
+        },
+        {
+          "name": "Page refs after failed actions: resume",
+          "status": "pass",
+          "assertions": 3
+        },
+        {
+          "name": "Page refs after upload: prepare",
+          "status": "pass",
+          "assertions": 2
+        },
+        {
+          "name": "Page refs after upload: resume",
+          "status": "pass",
+          "assertions": 3
+        },
+        {
+          "name": "Page snapshot lazy iframe",
+          "status": "pass",
+          "assertions": 14
+        },
+        {
+          "name": "Page snapshot sibling iframes",
+          "status": "pass",
+          "assertions": 14
+        },
+        {
+          "name": "Page snapshot nested iframes",
+          "status": "pass",
+          "assertions": 18
+        },
+        {
+          "name": "Page snapshot replaced iframe",
+          "status": "pass",
+          "assertions": 11
+        },
+        {
+          "name": "Page open Shadow DOM locators",
+          "status": "pass",
+          "assertions": 4
+        },
+        {
+          "name": "Page text locators",
+          "status": "pass",
+          "assertions": 6
+        },
+        {
+          "name": "Page Playwright selector compatibility",
+          "status": "pass",
+          "assertions": 16
+        },
+        {
+          "name": "Page popup waiter and URL diagnostic",
+          "status": "pass",
+          "assertions": 11
+        },
+        {
+          "name": "Page download lifecycle",
+          "status": "pass",
+          "assertions": 8
+        },
+        {
+          "name": "Concurrent TaskSpace downloads",
+          "status": "pass",
+          "assertions": 13
+        },
+        {
+          "name": "Page Chromium PDF viewer download",
+          "status": "pass",
+          "assertions": 13
+        },
+        {
+          "name": "Page download across rounds: prepare",
+          "status": "pass",
+          "assertions": 1
+        },
+        {
+          "name": "Page download across rounds: resume",
+          "status": "pass",
+          "assertions": 4
+        },
+        {
+          "name": "Page OOPIF actions",
+          "status": "pass",
+          "assertions": 15
+        },
+        {
+          "name": "Page OOPIF restore and close",
+          "status": "pass",
+          "assertions": 7
+        },
+        {
+          "name": "Page load states",
+          "status": "pass",
+          "assertions": 51
+        },
+        {
+          "name": "Page automation hooks",
+          "status": "pass",
+          "assertions": 3
+        },
+        {
+          "name": "Page dedicated Worker startup",
+          "status": "pass",
+          "assertions": 1
+        },
+        {
+          "name": "Page AudioWorklet startup",
+          "status": "pass",
+          "assertions": 1
+        },
+        {
+          "name": "Page SharedWorker startup",
+          "status": "pass",
+          "assertions": 1
+        },
+        {
+          "name": "Page Service Worker startup",
+          "status": "pass",
+          "assertions": 1
+        },
+        {
+          "name": "Page API alignment",
+          "status": "pass",
+          "assertions": 40
+        },
+        {
+          "name": "Page actionability",
+          "status": "pass",
+          "assertions": 46
+        },
+        {
+          "name": "Page evaluate timeout recovery",
+          "status": "pass",
+          "assertions": 24
+        },
+        {
+          "name": "Page pending navigation: same process",
+          "status": "pass",
+          "assertions": 15
+        },
+        {
+          "name": "Page pending navigation: fresh process",
+          "status": "pass",
+          "assertions": 4
+        },
+        {
+          "name": "Page delayed popup: schedule",
+          "status": "pass",
+          "assertions": 2
+        },
+        {
+          "name": "Page delayed popup: resume",
+          "status": "pass",
+          "assertions": 4
+        },
+        {
+          "name": "v1 and v2 action parity",
+          "status": "pass",
+          "assertions": 13
+        },
+        {
+          "name": "portable keyboard workflow",
+          "status": "pass",
+          "assertions": 4
+        },
+        {
+          "name": "Page keyboard interface",
+          "status": "pass",
+          "assertions": 38
+        },
+        {
+          "name": "pure CDP workflow",
+          "status": "pass",
+          "assertions": 9
+        },
+        {
+          "name": "snapshot workflow",
+          "status": "pass",
+          "assertions": 7
+        },
+        {
+          "name": "visual workflow",
+          "status": "pass",
+          "assertions": 5
+        }
+      ]
+    },
+    "clipboard": {
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "savedAndRestoredOriginalClipboard": true,
+      "originalFormatsRestored": 7,
+      "originalContentLogged": false
+    },
+    "controllerAssertions": 20,
+    "visibleController": {
+      "passed": true,
+      "input": "CUA through saved RustDesk connection; controlled fixture input, not a personal login",
+      "checks": [
+        "RustDesk Take control button during JavaScript dialog revokes pending command; original agent cannot override; independent B continues",
+        "RustDesk Take control button while Fetch interception holds navigation revokes pending agent command and releases browser navigation",
+        "RustDesk keyboard fixture input after takeover is readable by original agent after explicit Resume agent button",
+        "RustDesk Pause all button stops both tasks"
+      ],
+      "personalLoginOrMfa": false
+    }
+  },
+  "focusAndPointer": {
+    "passed": false,
+    "backend": "GNOME/X11 on TigerVNC VNC-0; virtual desktop",
+    "steps": [
+      {
+        "name": "create background task window",
+        "focusUnchanged": true,
+        "pointerUnchanged": true
+      },
+      {
+        "name": "navigate",
+        "focusUnchanged": true,
+        "pointerUnchanged": true
+      },
+      {
+        "name": "fill",
+        "focusUnchanged": true,
+        "pointerUnchanged": true
+      },
+      {
+        "name": "click",
+        "focusUnchanged": false,
+        "pointerUnchanged": true
+      },
+      {
+        "name": "background screenshot",
+        "focusUnchanged": false,
+        "pointerUnchanged": true
+      }
+    ],
+    "observedFailure": "Agent page.click brings its task window to foreground. New background window, navigation and fill preserved foreground; pointer remained unchanged in every step.",
+    "resolution": "Open defect; no runtime changes were made in this installation run."
+  },
+  "physicalDesktop": {
+    "backend": "Xorg on internal eDP-1, 1920x1080",
+    "display": ":2",
+    "fullInstalledSuite": {
+      "expectedCases": 81,
+      "passed": 71,
+      "failed": 10,
+      "skipped": 0,
+      "assertions": 1263,
+      "durationSeconds": 300.7,
+      "caseFilter": null,
+      "cleanupPassed": true,
+      "cases": [
+        {
+          "name": "environment initialization",
+          "status": "pass",
+          "assertions": 24
+        },
+        {
+          "name": "helper surface",
+          "status": "pass",
+          "assertions": 67
+        },
+        {
+          "name": "task spaces and control",
+          "status": "pass",
+          "assertions": 58
+        },
+        {
+          "name": "TaskSpace profile selection",
+          "status": "pass",
+          "assertions": 19
+        },
+        {
+          "name": "v2 cross-space routing",
+          "status": "pass",
+          "assertions": 4
+        },
+        {
+          "name": "navigation helpers",
+          "status": "pass",
+          "assertions": 33
+        },
+        {
+          "name": "observation helpers",
+          "status": "pass",
+          "assertions": 51
+        },
+        {
+          "name": "pointer and scroll helpers",
+          "status": "pass",
+          "assertions": 48
+        },
+        {
+          "name": "keyboard and file helpers",
+          "status": "pass",
+          "assertions": 22
+        },
+        {
+          "name": "keyboard regression",
+          "status": "pass",
+          "assertions": 14
+        },
+        {
+          "name": "wait, fetch, cdp, js, help",
+          "status": "pass",
+          "assertions": 42
+        },
+        {
+          "name": "runtime regression",
+          "status": "pass",
+          "assertions": 20
+        },
+        {
+          "name": "target-scoped event isolation",
+          "status": "pass",
+          "assertions": 4
+        },
+        {
+          "name": "page labels: create",
+          "status": "pass",
+          "assertions": 13
+        },
+        {
+          "name": "page labels: restore and reuse",
+          "status": "pass",
+          "assertions": 14
+        },
+        {
+          "name": "page labels: close and do not reuse",
+          "status": "pass",
+          "assertions": 10
+        },
+        {
+          "name": "page labels: persist before hard stop",
+          "status": "pass",
+          "assertions": 1
+        },
+        {
+          "name": "page labels: restore after hard stop",
+          "status": "pass",
+          "assertions": 3
+        },
+        {
+          "name": "page inventory and budget",
+          "status": "pass",
+          "assertions": 9
+        },
+        {
+          "name": "page adoption and release",
+          "status": "pass",
+          "assertions": 19
+        },
+        {
+          "name": "page basic operations",
+          "status": "pass",
+          "assertions": 53
+        },
+        {
+          "name": "page complex evaluate",
+          "status": "pass",
+          "assertions": 23
+        },
+        {
+          "name": "page fetch",
+          "status": "pass",
+          "assertions": 25
+        },
+        {
+          "name": "page actions and popup adoption",
+          "status": "fail",
+          "assertions": 43
+        },
+        {
+          "name": "Page action popup receipts",
+          "status": "pass",
+          "assertions": 9
+        },
+        {
+          "name": "Page action idle fail-fast",
+          "status": "pass",
+          "assertions": 14
+        },
+        {
+          "name": "Page click hit target",
+          "status": "pass",
+          "assertions": 17
+        },
+        {
+          "name": "Page action motion tolerance",
+          "status": "fail",
+          "assertions": 0
+        },
+        {
+          "name": "Page drag and canvas drawing",
+          "status": "pass",
+          "assertions": 15
+        },
+        {
+          "name": "Page JavaScript dialog handling",
+          "status": "pass",
+          "assertions": 34
+        },
+        {
+          "name": "Page media playback",
+          "status": "pass",
+          "assertions": 17
+        },
+        {
+          "name": "Page scrolled screenshot",
+          "status": "pass",
+          "assertions": 13
+        },
+        {
+          "name": "Page default screenshot path: first run",
+          "status": "pass",
+          "assertions": 9
+        },
+        {
+          "name": "Page default screenshot path: second run",
+          "status": "pass",
+          "assertions": 4
+        },
+        {
+          "name": "Page snapshot locator quality",
+          "status": "pass",
+          "assertions": 4
+        },
+        {
+          "name": "Page snapshot iframe viewport",
+          "status": "pass",
+          "assertions": 13
+        },
+        {
+          "name": "Page snapshot subtree",
+          "status": "pass",
+          "assertions": 46
+        },
+        {
+          "name": "Page auto-scroll past a wheel trap",
+          "status": "pass",
+          "assertions": 10
+        },
+        {
+          "name": "Page snapshot viewport overflow hint",
+          "status": "pass",
+          "assertions": 20
+        },
+        {
+          "name": "Page ref identity across partial snapshots",
+          "status": "pass",
+          "assertions": 14
+        },
+        {
+          "name": "Page refs across rounds: prepare",
+          "status": "pass",
+          "assertions": 5
+        },
+        {
+          "name": "Page refs across rounds: resume",
+          "status": "pass",
+          "assertions": 12
+        },
+        {
+          "name": "Page refs in dialog workflows",
+          "status": "pass",
+          "assertions": 10
+        },
+        {
+          "name": "Page refs after failed actions: prepare",
+          "status": "pass",
+          "assertions": 8
+        },
+        {
+          "name": "Page refs after failed actions: resume",
+          "status": "pass",
+          "assertions": 3
+        },
+        {
+          "name": "Page refs after upload: prepare",
+          "status": "pass",
+          "assertions": 2
+        },
+        {
+          "name": "Page refs after upload: resume",
+          "status": "pass",
+          "assertions": 3
+        },
+        {
+          "name": "Page snapshot lazy iframe",
+          "status": "pass",
+          "assertions": 14
+        },
+        {
+          "name": "Page snapshot sibling iframes",
+          "status": "pass",
+          "assertions": 14
+        },
+        {
+          "name": "Page snapshot nested iframes",
+          "status": "pass",
+          "assertions": 18
+        },
+        {
+          "name": "Page snapshot replaced iframe",
+          "status": "pass",
+          "assertions": 11
+        },
+        {
+          "name": "Page open Shadow DOM locators",
+          "status": "fail",
+          "assertions": 2
+        },
+        {
+          "name": "Page text locators",
+          "status": "pass",
+          "assertions": 6
+        },
+        {
+          "name": "Page Playwright selector compatibility",
+          "status": "fail",
+          "assertions": 12
+        },
+        {
+          "name": "Page popup waiter and URL diagnostic",
+          "status": "pass",
+          "assertions": 11
+        },
+        {
+          "name": "Page download lifecycle",
+          "status": "pass",
+          "assertions": 8
+        },
+        {
+          "name": "Concurrent TaskSpace downloads",
+          "status": "pass",
+          "assertions": 13
+        },
+        {
+          "name": "Page Chromium PDF viewer download",
+          "status": "pass",
+          "assertions": 13
+        },
+        {
+          "name": "Page download across rounds: prepare",
+          "status": "fail",
+          "assertions": 0
+        },
+        {
+          "name": "Page download across rounds: resume",
+          "status": "fail",
+          "assertions": 0
+        },
+        {
+          "name": "Page OOPIF actions",
+          "status": "fail",
+          "assertions": 5
+        },
+        {
+          "name": "Page OOPIF restore and close",
+          "status": "fail",
+          "assertions": 0
+        },
+        {
+          "name": "Page load states",
+          "status": "fail",
+          "assertions": 26
+        },
+        {
+          "name": "Page automation hooks",
+          "status": "pass",
+          "assertions": 3
+        },
+        {
+          "name": "Page dedicated Worker startup",
+          "status": "pass",
+          "assertions": 1
+        },
+        {
+          "name": "Page AudioWorklet startup",
+          "status": "pass",
+          "assertions": 1
+        },
+        {
+          "name": "Page SharedWorker startup",
+          "status": "pass",
+          "assertions": 1
+        },
+        {
+          "name": "Page Service Worker startup",
+          "status": "pass",
+          "assertions": 1
+        },
+        {
+          "name": "Page API alignment",
+          "status": "fail",
+          "assertions": 31
+        },
+        {
+          "name": "Page actionability",
+          "status": "pass",
+          "assertions": 46
+        },
+        {
+          "name": "Page evaluate timeout recovery",
+          "status": "pass",
+          "assertions": 24
+        },
+        {
+          "name": "Page pending navigation: same process",
+          "status": "pass",
+          "assertions": 15
+        },
+        {
+          "name": "Page pending navigation: fresh process",
+          "status": "pass",
+          "assertions": 4
+        },
+        {
+          "name": "Page delayed popup: schedule",
+          "status": "pass",
+          "assertions": 2
+        },
+        {
+          "name": "Page delayed popup: resume",
+          "status": "pass",
+          "assertions": 4
+        },
+        {
+          "name": "v1 and v2 action parity",
+          "status": "pass",
+          "assertions": 13
+        },
+        {
+          "name": "portable keyboard workflow",
+          "status": "pass",
+          "assertions": 4
+        },
+        {
+          "name": "Page keyboard interface",
+          "status": "pass",
+          "assertions": 38
+        },
+        {
+          "name": "pure CDP workflow",
+          "status": "pass",
+          "assertions": 9
+        },
+        {
+          "name": "snapshot workflow",
+          "status": "pass",
+          "assertions": 7
+        },
+        {
+          "name": "visual workflow",
+          "status": "pass",
+          "assertions": 5
+        }
+      ]
+    },
+    "qualified": false,
+    "sessionFailureWindowPresent": true,
+    "sessionFailureProcessStarted": "2026-10-05 09:54:50 EDT",
+    "activeForegroundWindow": false,
+    "note": "This actual-session attempt failed 10 cases. Pre-existing GNOME failure and absent active foreground window prevent qualification; the passing virtual desktop is not a physical substitute.",
+    "userAction": "Restore/log into physical desktop, then rerun full suite, controller and focus checks."
+  },
+  "sandbox": {
+    "profile": "default",
+    "headless": false,
+    "browser": {
+      "protocolVersion": "1.3",
+      "product": "Chrome/156.0.8078.47",
+      "revision": "@1d17a2e2ee147bb7d6ae2ab6abdb3a2510c17775",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "jsVersion": "15.6.75.19"
+    },
+    "privatePipe": true,
+    "noNoSandboxFlag": true,
+    "rendererCount": 9,
+    "renderers": [
+      {
+        "uid": 1000,
+        "noNewPrivs": 1,
+        "seccomp": 2
+      },
+      {
+        "uid": 1000,
+        "noNewPrivs": 1,
+        "seccomp": 2
+      },
+      {
+        "uid": 1000,
+        "noNewPrivs": 1,
+        "seccomp": 2
+      },
+      {
+        "uid": 1000,
+        "noNewPrivs": 1,
+        "seccomp": 2
+      },
+      {
+        "uid": 1000,
+        "noNewPrivs": 1,
+        "seccomp": 2
+      },
+      {
+        "uid": 1000,
+        "noNewPrivs": 1,
+        "seccomp": 2
+      },
+      {
+        "uid": 1000,
+        "noNewPrivs": 1,
+        "seccomp": 2
+      },
+      {
+        "uid": 1000,
+        "noNewPrivs": 1,
+        "seccomp": 2
+      },
+      {
+        "uid": 1000,
+        "noNewPrivs": 1,
+        "seccomp": 2
+      }
+    ],
+    "sandboxHelper": "existing system Chrome setuid helper; browser itself runs as ordinary user"
+  },
+  "remaining": [
+    "Foreground-stealing agent click on GNOME/X11",
+    "Usable physical X11 desktop full suite and human checks",
+    "Native Wayland backend/compositor qualification",
+    "Human personal-site sign-in/MFA and full accessibility pass"
+  ],
+  "handoff": {
+    "defaultProfileLeftOpen": true,
+    "defaultProfileAgentTasks": 0,
+    "qualificationBrowsersStopped": true,
+    "testControllerBrowserClosed": true,
+    "rawLogsCommitted": false,
+    "personalClipboardOrScreenshotsCommitted": false
+  }
+}

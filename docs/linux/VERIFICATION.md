@@ -2,6 +2,10 @@
 
 This fork implements the additive community Linux host described in `SOL-ONE-SHOT.md`. The original upstream project and MIT license remain present. The proprietary ego lite browser engine/UI is not included. The implementation is runnable; actual X11/Wayland desktop qualification and native Windows application qualification remain external gates.
 
+## Later MSI deployment
+
+The tested archive is installed and open on the MSI. Its usable RustDesk/TigerVNC desktop passed **81/81, 1,346 assertions, 0 skips**, clipboard 8/8 and controller 20 assertions plus visible button checks. A separate focus probe **failed**: agent click brought the task window forward while preserving pointer position. The actual physical Xorg session had a pre-existing GNOME session failure and its full run returned **71/81, 10 failures**. Physical X11/native Wayland remain unqualified. [Installation, limitations and resume commands](MSI-DESKTOP.md); [sanitized receipt](evidence/2026-10-23-msi-desktop.json). The initial receipts below remain valid for their stated environments.
+
 ## Source and environment
 
 - Upstream base: `c024c32aa9fb2b4f7ff0524e38e8984bc982db53` (`upstream/dev` at preparation).
@@ -10,7 +14,7 @@ This fork implements the additive community Linux host described in `SOL-ONE-SHO
 - Local preparation/portable tests: macOS ARM64. Actual Linux tests: Debian 12 ARM64, Node `22.23.4`, official Google Chrome for Testing `156.0.8078.47`, in Docker Desktop, as UID 1000. Headless and Xvfb are distinct synthetic qualification modes.
 - The Docker test container permits Chromium sandbox startup with `seccomp=unconfined` and `CAP_SYS_ADMIN`. Chromium itself runs without `--no-sandbox`, uses its own private debugging pipe, and its actual renderer processes were checked for `NoNewPrivs: 1` and `Seccomp: 2`. This is browser sandbox evidence, not a claim that this Docker configuration isolates hostile containers.
 - Remote CI: Ubuntu 24.04 x86_64, Node 22.23.3 and 24.21.0, official Google Chrome for Testing 156.0.8078.47. Both installed full suites passed 81/81 with 1,346 assertions and 0 skips (225.5 s / 226.9 s). CI enables user namespaces only for the root-owned test executable through a scoped AppArmor profile; it does not disable the global Ubuntu restriction.
-- No real Linux desktop, physical pointer/focus test, personal-account login, or native Windows app test was performed. Controlled local authentication/storage fixtures were used instead of personal credentials.
+- The initial runs did not include a physical Linux desktop, personal-account login or native Windows app. Subsequent MSI attempts and the focus defect are recorded above. Controlled local authentication/storage fixtures were used instead of personal credentials.
 
 ## Automated results
 
@@ -44,7 +48,7 @@ Independent review findings were repaired: stale-PID startup races, personal dow
 
 Task authorization uses client/agent identity, target/session lineage, capability, epoch and browser generation. Shared-profile tasks intentionally share website sessions and storage. They are not separate account or OS security boundaries. Use a different named profile for separate accounts. CLI invocations expose one selected named profile; select another with `--profile` or the controller.
 
-Task pages use independent background windows and internal renderer focus emulation so background screenshots/input work without a `Target.activateTarget` request or physical pointer movement. The effect on an actual desktop's focus/activation remains unqualified. The optional native cursor animation binding returns an explicit unsupported error. `egoAutomated` provides event-filtering compatibility; it cannot reproduce proprietary renderer anti-detection behavior.
+Task pages use independent background windows and internal renderer focus emulation so background screenshots/input work without a `Target.activateTarget` request or physical pointer movement. The later MSI virtual desktop measurement found that agent mouse input activates its task window; foreground preservation is an open defect. Physical desktop focus remains unqualified. The optional native cursor animation binding returns an explicit unsupported error. `egoAutomated` provides event-filtering compatibility; it cannot reproduce proprietary renderer anti-detection behavior.
 
 The host allows the two session-scoped viewport metric commands used by the existing SDK fixtures. It disables only `PdfGetSaveDataInBlocks`: the alternate chunked PDF-save path uses a native file writer and bypasses the browser download events required by the SDK. Live stock-Chrome A/B checks reproduced this difference; the unchanged PDF test then passed 13 assertions, and viewer/annotation controls remain enabled. The [Chromium feature definition](https://chromium.googlesource.com/chromium/src/+/main/pdf/pdf_features.cc) and final full-suite receipt document this compatibility setting.
 
