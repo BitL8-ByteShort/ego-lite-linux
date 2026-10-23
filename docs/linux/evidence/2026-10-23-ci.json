@@ -1,0 +1,130 @@
+{
+  "kind": "GitHub Actions qualification summary",
+  "runId": 40021709556,
+  "url": "https://github.com/BitL8-ByteShort/ego-lite-linux/actions/runs/40021709556",
+  "codeCommit": "6b1863f48b93697b31d66b703edb904553089fcb",
+  "status": "completed",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "Linux / Node 22",
+      "conclusion": "success",
+      "startedAt": "2026-10-23T20:45:47Z",
+      "completedAt": "2026-10-23T20:51:33Z",
+      "url": "https://github.com/BitL8-ByteShort/ego-lite-linux/actions/runs/40021709556/job/120647618254"
+    },
+    {
+      "name": "Portable SDK / windows-latest",
+      "conclusion": "success",
+      "startedAt": "2026-10-23T20:45:47Z",
+      "completedAt": "2026-10-23T20:47:11Z",
+      "url": "https://github.com/BitL8-ByteShort/ego-lite-linux/actions/runs/40021709556/job/120647618521"
+    },
+    {
+      "name": "Linux / Node lts/*",
+      "conclusion": "success",
+      "startedAt": "2026-10-23T20:45:48Z",
+      "completedAt": "2026-10-23T20:51:59Z",
+      "url": "https://github.com/BitL8-ByteShort/ego-lite-linux/actions/runs/40021709556/job/120647618666"
+    },
+    {
+      "name": "Portable SDK / macos-latest",
+      "conclusion": "success",
+      "startedAt": "2026-10-23T20:45:48Z",
+      "completedAt": "2026-10-23T20:46:35Z",
+      "url": "https://github.com/BitL8-ByteShort/ego-lite-linux/actions/runs/40021709556/job/120647618687"
+    },
+    {
+      "name": "Qualified Linux artifact gate",
+      "conclusion": "success",
+      "startedAt": "2026-10-23T20:52:01Z",
+      "completedAt": "2026-10-23T20:52:07Z",
+      "url": "https://github.com/BitL8-ByteShort/ego-lite-linux/actions/runs/40021709556/job/120650302788"
+    }
+  ],
+  "linux": {
+    "distribution": "Ubuntu24.04 x86_64 GitHub-hosted runner",
+    "browser": "Google Chrome for Testing156.0.8078.47",
+    "sandbox": "Unprivileged Chromium; private pipe; actual renderer NoNewPrivs=1/Seccomp=2 assertions passed. Exact root-owned executable AppArmor userns allowance in ephemeral CI; no global namespace restriction change.",
+    "fullInstalledSuites": [
+      {
+        "node": "22.23.3",
+        "matrix": "node22",
+        "expectedCases": 81,
+        "passed": 81,
+        "failed": 0,
+        "skipped": 0,
+        "assertions": 1346,
+        "durationSeconds": 225.5,
+        "backend": "X11/Xvfb, synthetic",
+        "fixtureCleanupPassed": true,
+        "stopOwnedBrowserStepPassed": true
+      },
+      {
+        "node": "24.21.0",
+        "matrix": "lts",
+        "expectedCases": 81,
+        "passed": 81,
+        "failed": 0,
+        "skipped": 0,
+        "assertions": 1346,
+        "durationSeconds": 226.9,
+        "backend": "X11/Xvfb, synthetic",
+        "fixtureCleanupPassed": true,
+        "stopOwnedBrowserStepPassed": true
+      }
+    ],
+    "portableSdk": {
+      "total": 602,
+      "passed": 595,
+      "failed": 0,
+      "explicitDisplaySkips": 7
+    },
+    "x11ClipboardWrapper": {
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    "host": {
+      "passed": 57,
+      "failed": 0,
+      "skipped": 0
+    },
+    "plugins": {
+      "passed": 42,
+      "failed": 0,
+      "skipped": 0
+    },
+    "installerContracts": 15,
+    "controllerAssertions": 20,
+    "persistenceConcurrencyLifecycle": "passed"
+  },
+  "portableMacWindows": {
+    "platforms": [
+      "macos-latest",
+      "windows-latest"
+    ],
+    "sdk": {
+      "total": 602,
+      "passed": 594,
+      "failed": 0,
+      "explicitLinuxDisplaySkips": 8
+    },
+    "plugins": {
+      "passed": 42,
+      "failed": 0,
+      "skipped": 0
+    },
+    "nativeApplicationLiveE2EQualified": false
+  },
+  "qualifiedArtifact": {
+    "artifactName": "ego-lite-community-linux",
+    "filename": "ego-lite-linux-0.1.0-dev.0-linux-x64.tar.gz",
+    "sha256": "f007f64fb442f741ad1a7d81239e8416dfa556c1ea0832eff3f2a2a68a6f81de",
+    "gitCommit": "6b1863f48b93697b31d66b703edb904553089fcb",
+    "sdkSha256": "d5825a11f17e37fe5ec39715cd63fa5fe85dbbab3aa837290437602bbb8eb0c6",
+    "checksumVerifiedAfterDownload": true,
+    "gatedOnAllRequiredJobs": true
+  },
+  "physicalDesktopQualification": false
+}

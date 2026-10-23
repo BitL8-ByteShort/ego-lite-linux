@@ -1,35 +1,35 @@
 # Linux acceptance and evidence ledger
 
-All implementation rows start **not implemented**. The planning scaffold is not product completion. The executor updates each row with the command, commit and evidence path; `pass` requires observed behavior. Use `blocked: <specific environment>` only for an external qualification dependency, not unfinished code.
+Updated implementation evidence is summarized below and in [VERIFICATION.md](VERIFICATION.md). Runtime `6b1863f` is the basis of the installed Linux suite; final receipts identify the exact artifact and SDK hashes. Every feasible automated gate is complete; A23/A24 and the named native application qualifications remain explicit exceptions. Automated, synthetic-display and physical-desktop results remain separate. External gates are not passes.
 
 | ID | Required outcome | Primary task | Status / evidence |
 |---|---|---|---|
-| A01 | Full upstream SDK, v1/v2 API, skills, learnings, plugins and MIT attribution retained | 1, 4, 7 | Not implemented |
-| A02 | Linux-owned sandboxed Chromium uses private pipe; no foreign browser attachment | 2 | Not implemented |
-| A03 | Dedicated named profile preserves cookie/localStorage/IndexedDB through complete browser/host restart and code upgrade | 2 | Not implemented |
-| A04 | Separate named profiles keep account state separate; same-profile tasks share a controlled login intentionally | 2, 3 | Not implemented |
-| A05 | Concurrent CLI clients keep task selection, CDP request IDs, sessions, popups, events and downloads correctly scoped | 3 | Not implemented |
-| A06 | Foreign task/session/target/embedded parameter access rejected; user/controller tabs never silently claimed | 3 | Not implemented |
-| A07 | User hard pause revokes queued work and future commands; dialog/Fetch/long wait does not freeze human control | 3, 6 | Not implemented |
-| A08 | Delegated handoff, user hard pause, resume, completed/closed tasks and headless errors behave distinctly and correctly | 3, 6 | Not implemented |
-| A09 | Restart invalidates stale refs/capabilities; unproven restored tabs stay user-owned | 2–5 | Not implemented |
-| A10 | Bare stdin, nodejs stdin/-e/file, skill, help, doctor/status/stop/open and --sdk-path work from installed payload | 4, 7 | Not implemented |
-| A11 | SDK/guide alignment; native bindings preserved; help/skill/import has no unintended browser launch | 4, 7 | Not implemented |
-| A12 | Main frame, same-origin iframe, OOPIF and shadow-DOM snapshots/actions; repeated backend IDs resolve correctly | 5 | Not implemented |
-| A13 | Full/viewport/subtree/interactive/truncation/locator/ref lifetime contracts, including separate CLI rounds | 5 | Not implemented |
-| A14 | Full current upstream browser suite: navigation, waits, input, drag, screenshots, downloads/uploads, dialogs, popups, workers | 5, 8 | Not implemented |
-| A15 | Linux plain/rich clipboard semantics, Unicode, safe restore and user change during paste | 5, 8 | Not implemented |
-| A16 | Desktop launcher opens personal browsing and Spaces UI; profile/task controls and accessible feedback work | 6 | Not implemented |
-| A17 | Authentication-like human handoff flow completes; agent consumes persistent login | 6 | Not implemented |
-| A18 | Ordinary automation does not move physical pointer or activate user tabs; explicit reveal is handled accurately | 6, 8 | Not implemented |
-| A19 | Local UI auth/Origin/Host/CSP and task-text escaping; no public raw CDP/control exposure | 6 | Not implemented |
-| A20 | Relocatable archive installs outside checkout; path spaces, unrelated-command collision, upgrade/rollback/uninstall preserve profiles | 7 | Not implemented |
-| A21 | Linux platform guide/install routing, all plugin artifacts and a real installed agent workflow work | 7 | Not implemented |
-| A22 | SDK/host/unit/type/style/audit/plugin/site checks and sandboxed Linux CI pass; Linux artifacts depend on Linux checks | 8 | Not implemented |
-| A23 | Actual X11 desktop qualification, full E2E and human controls recorded | 8 | Not run |
-| A24 | Actual native Wayland desktop qualification, verified backend and full E2E/human controls recorded | 8 | Not run |
-| A25 | Mac/Windows portable regressions pass; native app live E2E separately recorded when available | 8 | Not run after implementation |
-| A26 | Independent review resolved, clean diff, checksums, reproducible install/run commands and verification report | 9 | Not implemented |
+| A01 | Full upstream SDK, v1/v2 API, skills, learnings, plugins and MIT attribution retained | 1, 4, 7 | Pass — full upstream tree and MIT retained; public/native contracts preserved; SDK 602 tests and plugins 42/42; all 9 plugin packages extracted outside checkout. |
+| A02 | Linux-owned sandboxed Chromium uses private pipe; no foreign browser attachment | 2 | Pass — real unprivileged Chromium, dedicated profile and private pipe; no foreign attachment; 20 observed final renderers had NoNewPrivs=1 and Seccomp=2. x64 CI also passed sandbox assertions. |
+| A03 | Dedicated named profile preserves cookie/localStorage/IndexedDB through complete browser/host restart and code upgrade | 2 | Pass — cookie/localStorage/IndexedDB survive full shutdown, changed-code installed upgrade `8f1cd49` → `6b1863f`, and changed generation; final installed-upgrade receipt. |
+| A04 | Separate named profiles keep account state separate; same-profile tasks share a controlled login intentionally | 2, 3 | Pass — real separate profiles and concurrent independent CLI clients sharing the controlled login in one profile; persistence/concurrency fixtures. |
+| A05 | Concurrent CLI clients keep task selection, CDP request IDs, sessions, popups, events and downloads correctly scoped | 3 | Pass — bridge/authority contracts and full installed 81-case suites, including scoped popups, events and concurrent downloads; no case filter. |
+| A06 | Foreign task/session/target/embedded parameter access rejected; user/controller tabs never silently claimed | 3 | Pass — target/session/embedded-ID and verified frame-lineage rejection; controller/inbox unclaimed; real foreign-agent denial. |
+| A07 | User hard pause revokes queued work and future commands; dialog/Fetch/long wait does not freeze human control | 3, 6 | Pass automated/synthetic — immediate pending-command revocation and Fetch/debugger release; live controller 20 assertions with independent B; dialog/Fetch cases in the full suite. Physical desktop control remains A23/A24. |
+| A08 | Delegated handoff, user hard pause, resume, completed/closed tasks and headless errors behave distinctly and correctly | 3, 6 | Pass automated/synthetic — delegation differs from hard pause; explicit human resume/grant, close/completion and headless errors; controller and task suites. |
+| A09 | Restart invalidates stale refs/capabilities; unproven restored tabs stay user-owned | 2–5 | Pass — real crash/restart changes generation; restored metadata hard-paused; unproven targets remain in inbox; profile/generation SDK state and refs. |
+| A10 | Bare stdin, nodejs stdin/-e/file, skill, help, doctor/status/stop/open and --sdk-path work from installed payload | 4, 7 | Pass — CLI contracts plus actual installed workflow, later rounds and explicit matching --sdk-path; path-space relocation. Additional all-form installed receipt in VERIFICATION.md. |
+| A11 | SDK/guide alignment; native bindings preserved; help/skill/import has no unintended browser launch | 4, 7 | Pass — public schema preserved, matching platform guides, native binding precedence, help/skill without browser startup; Mac/Windows portable CI. |
+| A12 | Main frame, same-origin iframe, OOPIF and shadow-DOM snapshots/actions; repeated backend IDs resolve correctly | 5 | Pass — frame/lineage contracts and live full-suite main/iframe/OOPIF/shadow actions, including repeated renderer backend IDs and child ownership. |
+| A13 | Full/viewport/subtree/interactive/truncation/locator/ref lifetime contracts, including separate CLI rounds | 5 | Pass — full/viewport/subtree/interactive/truncation/locator/ref contracts; live cross-round and navigation cases in all final 81-case runs. |
+| A14 | Full current upstream browser suite: navigation, waits, input, drag, screenshots, downloads/uploads, dialogs, popups, workers | 5, 8 | Pass — ARM64 and x64 installed archives each passed 81/81, 1,346 assertions, 0 failures, 0 skips. x64 passed on Node 22 and LTS; tested --sdk-path hashes match packaged SDK. |
+| A15 | Linux plain/rich clipboard semantics, Unicode, safe restore and user change during paste | 5, 8 | X11 synthetic pass — all 8 native clipboard/wrapper cases under Xvfb, including rich/plain/Unicode and ownership-safe restore. Native Wayland paste explicitly fails before mutation; insertText remains available. Physical desktop unqualified. |
+| A16 | Desktop launcher opens personal browsing and Spaces UI; profile/task controls and accessible feedback work | 6 | Implemented and Xvfb controller passed 20 assertions, including HTML reload, profiles/tasks and explicit owner grant; installed desktop-entry contracts. Actual desktop launcher/accessibility remains A23/A24. |
+| A17 | Authentication-like human handoff flow completes; agent consumes persistent login | 6 | Pass controlled fixture — trusted human-like input after delegation/pause, resume and persistent shared login. Personal sign-in/MFA was not automated. |
+| A18 | Ordinary automation does not move physical pointer or activate user tabs; explicit reveal is handled accurately | 6, 8 | Pass structural/synthetic — independent background windows and renderer focus emulation; automation does not call activation or OS pointer APIs. Actual physical focus/reveal remains A23/A24. |
+| A19 | Local UI auth/Origin/Host/CSP and task-text escaping; no public raw CDP/control exposure | 6 | Pass — authenticated loopback controller, Host/Origin/token/CSP/escaping contracts, private pipe/socket, reserved controller target and live HTML authentication/reload. |
+| A20 | Relocatable archive installs outside checkout; path spaces, unrelated-command collision, upgrade/rollback/uninstall preserve profiles | 7 | Pass — 15/15 Linux installer contracts; actual relocated install with spaces, changed-code upgrade and full restart; rollback/collision/uninstall preservation; final receipt. |
+| A21 | Linux platform guide/install routing, all plugin artifacts and a real installed agent workflow work | 7 | Pass — Linux guide/install routing, 42 plugin tests, all 9 extracted packages and actual installed snapshot/click/later-round workflow. |
+| A22 | SDK/host/unit/type/style/audit/plugin/site checks and sandboxed Linux CI pass; Linux artifacts depend on Linux checks | 8 | Pass — all local checks and final CI run 40021709556: Linux Node 22/LTS, Mac/Windows portable and dependent artifact gate. Downloaded x64 archive checksum verified. |
+| A23 | Actual X11 desktop qualification, full E2E and human controls recorded | 8 | External gate — no actual X11 desktop available. Xvfb full-suite/controller/clipboard results are synthetic. Concrete resume commands in VERIFICATION.md. |
+| A24 | Actual native Wayland desktop qualification, verified backend and full E2E/human controls recorded | 8 | External gate — no actual native Wayland/compositor available; XWayland is not substituted. Explicit clipboard limitation and backend-verification/resume commands in VERIFICATION.md. |
+| A25 | Mac/Windows portable regressions pass; native app live E2E separately recorded when available | 8 | Mac/Windows portable CI passed: SDK 594 passed/8 explicit platform skips, plugins 42/42 each. Native Mac 78/81, 3 failures reproduced on unchanged upstream. Native Windows app unavailable; live qualification remains open. |
+| A26 | Independent review resolved, clean diff, checksums, reproducible install/run commands and verification report | 9 | Pass for implementation — independent reviews resolved; final types/styles/audits/diff/checksums pass; exact source/SDK/artifact receipts and install/resume report recorded; tested runtime pushed to fork. |
 
 ## Receipt minimum
 

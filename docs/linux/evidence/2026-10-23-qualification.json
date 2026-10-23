@@ -1,0 +1,736 @@
+{
+  "schemaVersion": 1,
+  "kind": "full-upstream-e2e",
+  "status": "passed",
+  "codeCommit": "6b1863f48b93697b31d66b703edb904553089fcb",
+  "artifact": "ego-lite-linux-0.1.0-dev.0-linux-arm64.tar.gz",
+  "artifactManifestCodeCommit": "6b1863f48b93697b31d66b703edb904553089fcb",
+  "artifactCodeCommitMatches": true,
+  "artifactSha256": "d0bb4136a8e3efe5d493b5801d07c7d26c1a5b86caa634f49b505262b1821a56",
+  "sdkSha256": "d5825a11f17e37fe5ec39715cd63fa5fe85dbbab3aa837290437602bbb8eb0c6",
+  "runtimeSdkSha256": "d5825a11f17e37fe5ec39715cd63fa5fe85dbbab3aa837290437602bbb8eb0c6",
+  "sdkMatchesPackaged": true,
+  "startedAt": "2026-10-23T20:46:04Z",
+  "finishedReceiptAt": "2026-10-23T20:49:54.688Z",
+  "exitCode": 0,
+  "platform": "linux",
+  "arch": "arm64",
+  "node": "v22.23.4",
+  "browser": "Google Chrome for Testing 156.0.8078.47",
+  "backend": "X11 under Xvfb in Docker; synthetic, not native desktop qualification",
+  "onlyCasesFilter": null,
+  "expectedCases": 81,
+  "actualCases": 81,
+  "passed": 81,
+  "failed": 0,
+  "skipped": 0,
+  "assertions": 1346,
+  "duration": "201.6s",
+  "cleanup": {
+    "runnerCleanupPassed": true,
+    "ownedBrowserOrDaemonProcessesRemaining": []
+  },
+  "cases": [
+    {
+      "name": "environment initialization",
+      "status": "pass",
+      "duration": "1.9s",
+      "assertions": 24
+    },
+    {
+      "name": "helper surface",
+      "status": "pass",
+      "duration": "161ms",
+      "assertions": 67
+    },
+    {
+      "name": "task spaces and control",
+      "status": "pass",
+      "duration": "989ms",
+      "assertions": 58
+    },
+    {
+      "name": "TaskSpace profile selection",
+      "status": "pass",
+      "duration": "277ms",
+      "assertions": 19
+    },
+    {
+      "name": "v2 cross-space routing",
+      "status": "pass",
+      "duration": "520ms",
+      "assertions": 4
+    },
+    {
+      "name": "navigation helpers",
+      "status": "pass",
+      "duration": "2.0s",
+      "assertions": 33
+    },
+    {
+      "name": "observation helpers",
+      "status": "pass",
+      "duration": "2.1s",
+      "assertions": 51
+    },
+    {
+      "name": "pointer and scroll helpers",
+      "status": "pass",
+      "duration": "6.4s",
+      "assertions": 48
+    },
+    {
+      "name": "keyboard and file helpers",
+      "status": "pass",
+      "duration": "1.7s",
+      "assertions": 22
+    },
+    {
+      "name": "keyboard regression",
+      "status": "pass",
+      "duration": "1.1s",
+      "assertions": 14
+    },
+    {
+      "name": "wait, fetch, cdp, js, help",
+      "status": "pass",
+      "duration": "2.8s",
+      "assertions": 42
+    },
+    {
+      "name": "runtime regression",
+      "status": "pass",
+      "duration": "3.2s",
+      "assertions": 20
+    },
+    {
+      "name": "target-scoped event isolation",
+      "status": "pass",
+      "duration": "3.5s",
+      "assertions": 4
+    },
+    {
+      "name": "page labels: create",
+      "status": "pass",
+      "duration": "787ms",
+      "assertions": 13
+    },
+    {
+      "name": "page labels: restore and reuse",
+      "status": "pass",
+      "duration": "496ms",
+      "assertions": 14
+    },
+    {
+      "name": "page labels: close and do not reuse",
+      "status": "pass",
+      "duration": "540ms",
+      "assertions": 10
+    },
+    {
+      "name": "page labels: persist before hard stop",
+      "status": "pass",
+      "duration": "273ms",
+      "assertions": 1
+    },
+    {
+      "name": "page labels: restore after hard stop",
+      "status": "pass",
+      "duration": "361ms",
+      "assertions": 3
+    },
+    {
+      "name": "page inventory and budget",
+      "status": "pass",
+      "duration": "791ms",
+      "assertions": 9
+    },
+    {
+      "name": "page adoption and release",
+      "status": "pass",
+      "duration": "632ms",
+      "assertions": 19
+    },
+    {
+      "name": "page basic operations",
+      "status": "pass",
+      "duration": "1.4s",
+      "assertions": 53
+    },
+    {
+      "name": "page complex evaluate",
+      "status": "pass",
+      "duration": "530ms",
+      "assertions": 23
+    },
+    {
+      "name": "page fetch",
+      "status": "pass",
+      "duration": "587ms",
+      "assertions": 25
+    },
+    {
+      "name": "page actions and popup adoption",
+      "status": "pass",
+      "duration": "4.1s",
+      "assertions": 58
+    },
+    {
+      "name": "Page action popup receipts",
+      "status": "pass",
+      "duration": "895ms",
+      "assertions": 9
+    },
+    {
+      "name": "Page action idle fail-fast",
+      "status": "pass",
+      "duration": "4.4s",
+      "assertions": 14
+    },
+    {
+      "name": "Page click hit target",
+      "status": "pass",
+      "duration": "3.1s",
+      "assertions": 17
+    },
+    {
+      "name": "Page action motion tolerance",
+      "status": "pass",
+      "duration": "906ms",
+      "assertions": 6
+    },
+    {
+      "name": "Page drag and canvas drawing",
+      "status": "pass",
+      "duration": "821ms",
+      "assertions": 15
+    },
+    {
+      "name": "Page JavaScript dialog handling",
+      "status": "pass",
+      "duration": "606ms",
+      "assertions": 34
+    },
+    {
+      "name": "Page media playback",
+      "status": "pass",
+      "duration": "4.6s",
+      "assertions": 17
+    },
+    {
+      "name": "Page scrolled screenshot",
+      "status": "pass",
+      "duration": "436ms",
+      "assertions": 13
+    },
+    {
+      "name": "Page default screenshot path: first run",
+      "status": "pass",
+      "duration": "447ms",
+      "assertions": 9
+    },
+    {
+      "name": "Page default screenshot path: second run",
+      "status": "pass",
+      "duration": "330ms",
+      "assertions": 4
+    },
+    {
+      "name": "Page snapshot locator quality",
+      "status": "pass",
+      "duration": "459ms",
+      "assertions": 4
+    },
+    {
+      "name": "Page snapshot iframe viewport",
+      "status": "pass",
+      "duration": "891ms",
+      "assertions": 13
+    },
+    {
+      "name": "Page snapshot subtree",
+      "status": "pass",
+      "duration": "1.5s",
+      "assertions": 46
+    },
+    {
+      "name": "Page auto-scroll past a wheel trap",
+      "status": "pass",
+      "duration": "2.3s",
+      "assertions": 10
+    },
+    {
+      "name": "Page snapshot viewport overflow hint",
+      "status": "pass",
+      "duration": "635ms",
+      "assertions": 20
+    },
+    {
+      "name": "Page ref identity across partial snapshots",
+      "status": "pass",
+      "duration": "1.2s",
+      "assertions": 14
+    },
+    {
+      "name": "Page refs across rounds: prepare",
+      "status": "pass",
+      "duration": "308ms",
+      "assertions": 5
+    },
+    {
+      "name": "Page refs across rounds: resume",
+      "status": "pass",
+      "duration": "4.7s",
+      "assertions": 12
+    },
+    {
+      "name": "Page refs in dialog workflows",
+      "status": "pass",
+      "duration": "435ms",
+      "assertions": 10
+    },
+    {
+      "name": "Page refs after failed actions: prepare",
+      "status": "pass",
+      "duration": "615ms",
+      "assertions": 8
+    },
+    {
+      "name": "Page refs after failed actions: resume",
+      "status": "pass",
+      "duration": "251ms",
+      "assertions": 3
+    },
+    {
+      "name": "Page refs after upload: prepare",
+      "status": "pass",
+      "duration": "379ms",
+      "assertions": 2
+    },
+    {
+      "name": "Page refs after upload: resume",
+      "status": "pass",
+      "duration": "67ms",
+      "assertions": 3
+    },
+    {
+      "name": "Page snapshot lazy iframe",
+      "status": "pass",
+      "duration": "308ms",
+      "assertions": 14
+    },
+    {
+      "name": "Page snapshot sibling iframes",
+      "status": "pass",
+      "duration": "489ms",
+      "assertions": 14
+    },
+    {
+      "name": "Page snapshot nested iframes",
+      "status": "pass",
+      "duration": "522ms",
+      "assertions": 18
+    },
+    {
+      "name": "Page snapshot replaced iframe",
+      "status": "pass",
+      "duration": "322ms",
+      "assertions": 11
+    },
+    {
+      "name": "Page open Shadow DOM locators",
+      "status": "pass",
+      "duration": "803ms",
+      "assertions": 4
+    },
+    {
+      "name": "Page text locators",
+      "status": "pass",
+      "duration": "917ms",
+      "assertions": 6
+    },
+    {
+      "name": "Page Playwright selector compatibility",
+      "status": "pass",
+      "duration": "2.9s",
+      "assertions": 16
+    },
+    {
+      "name": "Page popup waiter and URL diagnostic",
+      "status": "pass",
+      "duration": "1.3s",
+      "assertions": 11
+    },
+    {
+      "name": "Page download lifecycle",
+      "status": "pass",
+      "duration": "663ms",
+      "assertions": 8
+    },
+    {
+      "name": "Concurrent TaskSpace downloads",
+      "status": "pass",
+      "duration": "3.8s",
+      "assertions": 13
+    },
+    {
+      "name": "Page Chromium PDF viewer download",
+      "status": "pass",
+      "duration": "736ms",
+      "assertions": 13
+    },
+    {
+      "name": "Page download across rounds: prepare",
+      "status": "pass",
+      "duration": "629ms",
+      "assertions": 1
+    },
+    {
+      "name": "Page download across rounds: resume",
+      "status": "pass",
+      "duration": "148ms",
+      "assertions": 4
+    },
+    {
+      "name": "Page OOPIF actions",
+      "status": "pass",
+      "duration": "2.3s",
+      "assertions": 15
+    },
+    {
+      "name": "Page OOPIF restore and close",
+      "status": "pass",
+      "duration": "290ms",
+      "assertions": 7
+    },
+    {
+      "name": "Page load states",
+      "status": "pass",
+      "duration": "11.8s",
+      "assertions": 51
+    },
+    {
+      "name": "Page automation hooks",
+      "status": "pass",
+      "duration": "544ms",
+      "assertions": 3
+    },
+    {
+      "name": "Page dedicated Worker startup",
+      "status": "pass",
+      "duration": "292ms",
+      "assertions": 1
+    },
+    {
+      "name": "Page AudioWorklet startup",
+      "status": "pass",
+      "duration": "284ms",
+      "assertions": 1
+    },
+    {
+      "name": "Page SharedWorker startup",
+      "status": "pass",
+      "duration": "281ms",
+      "assertions": 1
+    },
+    {
+      "name": "Page Service Worker startup",
+      "status": "pass",
+      "duration": "287ms",
+      "assertions": 1
+    },
+    {
+      "name": "Page API alignment",
+      "status": "pass",
+      "duration": "4.0s",
+      "assertions": 40
+    },
+    {
+      "name": "Page actionability",
+      "status": "pass",
+      "duration": "3.4s",
+      "assertions": 46
+    },
+    {
+      "name": "Page evaluate timeout recovery",
+      "status": "pass",
+      "duration": "48.5s",
+      "assertions": 24
+    },
+    {
+      "name": "Page pending navigation: same process",
+      "status": "pass",
+      "duration": "20.2s",
+      "assertions": 15
+    },
+    {
+      "name": "Page pending navigation: fresh process",
+      "status": "pass",
+      "duration": "19.8s",
+      "assertions": 4
+    },
+    {
+      "name": "Page delayed popup: schedule",
+      "status": "pass",
+      "duration": "734ms",
+      "assertions": 2
+    },
+    {
+      "name": "Page delayed popup: resume",
+      "status": "pass",
+      "duration": "1.1s",
+      "assertions": 4
+    },
+    {
+      "name": "v1 and v2 action parity",
+      "status": "pass",
+      "duration": "568ms",
+      "assertions": 13
+    },
+    {
+      "name": "portable keyboard workflow",
+      "status": "pass",
+      "duration": "704ms",
+      "assertions": 4
+    },
+    {
+      "name": "Page keyboard interface",
+      "status": "pass",
+      "duration": "1.8s",
+      "assertions": 38
+    },
+    {
+      "name": "pure CDP workflow",
+      "status": "pass",
+      "duration": "375ms",
+      "assertions": 9
+    },
+    {
+      "name": "snapshot workflow",
+      "status": "pass",
+      "duration": "1.5s",
+      "assertions": 7
+    },
+    {
+      "name": "visual workflow",
+      "status": "pass",
+      "duration": "299ms",
+      "assertions": 5
+    }
+  ],
+  "environment": {
+    "distribution": "Debian12 (bookworm)",
+    "execution": "Docker Desktop Linux ARM64; UID1000",
+    "display": "X11/Xvfb; synthetic",
+    "containerOptions": {
+      "image": "ego-linux-test",
+      "user": "node",
+      "seccomp": "unconfined",
+      "capAdd": [
+        "SYS_ADMIN"
+      ]
+    },
+    "sandbox": {
+      "privateDebuggingPipe": true,
+      "noNoSandboxFlag": true,
+      "observedRenderers": 20,
+      "allRenderersUid1000": true,
+      "allRenderersNoNewPrivs": 1,
+      "allRenderersSeccomp": 2
+    }
+  },
+  "command": "EGO_BROWSER_REAL_E2E_CLI=\"<installed prefix with spaces>/bin/ego-browser\" EGO_LINUX_AGENT_ID=<unique workflow> EGO_LINUX_HEADLESS=0 xvfb-run -a npm run e2e --prefix package/ego-browser (no ONLY filter; actual --sdk-path bundle equals packaged SDK hash)",
+  "installedUpgrade": {
+    "passed": true,
+    "cleanup": true,
+    "checks": {
+      "installerContracts": 15,
+      "installedWorkflow": 1,
+      "laterCliRound": 1,
+      "versionUpgrade": 1,
+      "changedCodeUpgrade": 1,
+      "unexpectedSkips": 0
+    },
+    "upgrade": {
+      "from": {
+        "version": "0.1.0-dev.previous",
+        "archiveSha256": "9ab644097a8b30251c2e64c8bd6d0503798a039221cd825adc12c823abe9e09b",
+        "gitCommit": "8f1cd4975188bca2758e29846d2dea9b15871e0d",
+        "runtimeSha256": "014e680d3bf4a5a9858fc8f31a7a0076b8c3ecbd8acd3de1a701a8bb0ff24b21"
+      },
+      "to": {
+        "version": "0.1.0-dev.1",
+        "archiveSha256": "660042e2f4b1bd19634c214110460cd69d8df18fa080449232f8d56226ff5af5",
+        "gitCommit": "6b1863f48b93697b31d66b703edb904553089fcb",
+        "runtimeSha256": "3f5accb943bfd0a099b62a54427e05288a4dfa9139026833f5898629642f8986"
+      },
+      "selectedCurrentArchiveSha256": "d0bb4136a8e3efe5d493b5801d07c7d26c1a5b86caa634f49b505262b1821a56",
+      "changedRuntimeCode": true,
+      "sameCodeUpgrade": false,
+      "codeUpgradeQualified": true,
+      "generationChanged": true,
+      "statePreserved": [
+        "persistent cookie",
+        "localStorage",
+        "IndexedDB"
+      ]
+    },
+    "note": "Temporary next-version archive contains the exact tested current runtime; selected source archive unchanged."
+  },
+  "currentSourcePayloadComparison": {
+    "codeCommit": "6b1863f48b93697b31d66b703edb904553089fcb",
+    "archiveSha256": "d0bb4136a8e3efe5d493b5801d07c7d26c1a5b86caa634f49b505262b1821a56",
+    "matchedFiles": 74,
+    "allMatched": true,
+    "scope": "compiled host, SDK, guides/skills/learnings, shipped installer/uninstaller, desktop assets, package manifest, license/attribution"
+  },
+  "portableAndContractChecks": {
+    "sdkMac": {
+      "total": 602,
+      "passed": 594,
+      "failed": 0,
+      "explicitPlatformDisplaySkips": 8
+    },
+    "host": {
+      "passed": 57,
+      "failed": 0,
+      "skipped": 0
+    },
+    "plugins": {
+      "passed": 42,
+      "failed": 0,
+      "skipped": 0
+    },
+    "linuxX11ClipboardAndWrapper": {
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "backend": "Xvfb"
+    },
+    "controllerAssertions": 20,
+    "linuxInstallerContracts": 15,
+    "forkFreshnessContracts": 4,
+    "registryAuditVulnerabilities": 0
+  },
+  "pluginExtraction": {
+    "passed": true,
+    "artifacts": [
+      {
+        "artifact": "ego-claude-code-v2.2.0.zip",
+        "sha256": "06a9d56e21d7114d364a16171afdae01d7326abf3f30349485e3cde5d3afb482",
+        "skillCount": 1,
+        "outsideCheckout": true,
+        "extracted": true
+      },
+      {
+        "artifact": "ego-codex-v2.2.0.zip",
+        "sha256": "6afbda4fe7d1e438929f5a698fb0354307520d0e622be0ba83dfb5e66180a21d",
+        "skillCount": 1,
+        "outsideCheckout": true,
+        "extracted": true
+      },
+      {
+        "artifact": "ego-cursor-v2.2.0.zip",
+        "sha256": "a696270afe5a0d296fafd21d14a5c50563717fb6176da187bbc3276b2567dd5d",
+        "skillCount": 1,
+        "outsideCheckout": true,
+        "extracted": true
+      },
+      {
+        "artifact": "ego-deepseek-harness-v2.2.0.tgz",
+        "sha256": "c06d3dfd53f4f84638d022edeb84601c78bd9d6fe1c11fcf9e3e3180005886cb",
+        "skillCount": 1,
+        "outsideCheckout": true,
+        "extracted": true
+      },
+      {
+        "artifact": "ego-github-copilot-v2.2.0.zip",
+        "sha256": "6f48393976dd3ebad5e311630c102b9053ce0a68a818f6a18f015d8e694ccc6a",
+        "skillCount": 1,
+        "outsideCheckout": true,
+        "extracted": true
+      },
+      {
+        "artifact": "ego-grok-build-v2.2.0.zip",
+        "sha256": "a08529e6e94cc315c6c7d60fd52bff6fad2ac96faf4e96edac49e68b18e5a4be",
+        "skillCount": 1,
+        "outsideCheckout": true,
+        "extracted": true
+      },
+      {
+        "artifact": "ego-opencode-v2.2.0.tgz",
+        "sha256": "1888b65781e38dc9352f700c140ff106000543ea3b612c503d8e20f12892a026",
+        "skillCount": 1,
+        "outsideCheckout": true,
+        "extracted": true
+      },
+      {
+        "artifact": "ego-qwenwork-v2.2.0.zip",
+        "sha256": "b8fe0d66488e791fbf2d03a39a6564445ca85d6ea0932e23b163ba469ac5db51",
+        "skillCount": 1,
+        "outsideCheckout": true,
+        "extracted": true
+      },
+      {
+        "artifact": "ego-workbuddy-v2.2.0.zip",
+        "sha256": "84cc9f7b1ff55567e04ad79828b21e39bb5b852ea389896abba206ca1917afa8",
+        "skillCount": 1,
+        "outsideCheckout": true,
+        "extracted": true
+      }
+    ]
+  },
+  "externalGates": [
+    "Actual physical X11 desktop/focus/pointer/accessibility",
+    "Native Wayland backend/compositor desktop; safe clipboard paste unsupported before mutation",
+    "Native Windows application live E2E"
+  ],
+  "nativeMac": {
+    "fullSuite": {
+      "passed": 78,
+      "failed": 3,
+      "skipped": 0,
+      "assertions": 1327
+    },
+    "unchangedUpstreamDiagnostic": {
+      "base": "c024c32aa9fb2b4f7ff0524e38e8984bc982db53",
+      "selectedFailuresReproduced": 3,
+      "intentionallySkippedOtherCases": 78
+    },
+    "failedCases": [
+      "Page Playwright selector compatibility",
+      "Page OOPIF actions",
+      "Page OOPIF restore and close"
+    ]
+  },
+  "installedCliForms": {
+    "passed": true,
+    "codeCommit": "6b1863f48b93697b31d66b703edb904553089fcb",
+    "archiveSha256": "d0bb4136a8e3efe5d493b5801d07c7d26c1a5b86caa634f49b505262b1821a56",
+    "platform": "linux",
+    "arch": "arm64",
+    "node": "v22.23.4",
+    "browser": "Chromium 156.0.8078.47 built on Debian GNU/Linux 12 (bookworm)",
+    "backend": "X11/Xvfb; synthetic",
+    "outsideCheckout": true,
+    "prefixWithSpaces": true,
+    "extractedSourceRemovedBeforeRun": true,
+    "checks": [
+      "help",
+      "skill",
+      "doctor",
+      "installed desktop launcher/open under Xvfb",
+      "status",
+      "bare stdin real snapshot/input",
+      "nodejs stdin",
+      "nodejs -e",
+      "nodejs file with spaces",
+      "installed --sdk-path",
+      "stop",
+      "idempotent stop",
+      "uninstall retains profile"
+    ],
+    "rounds": 5,
+    "cleanup": true
+  }
+}

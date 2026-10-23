@@ -24,32 +24,34 @@ Preparation host: macOS; Node `v26.10.0`, npm `11.19.1`. Base SDK: `c024c32aa9fb
 - `bash -n scripts/linux/start-sol.sh scripts/linux/preflight.sh`: passed.
 - `./scripts/linux/start-sol.sh --check`: passed; selected `gpt-6.1-sol` with `xhigh`, without launching implementation.
 - `./scripts/linux/preflight.sh`: passed on the preparation host; confirms this is macOS and does not qualify Linux behavior.
-- Live Linux browser / X11 / Wayland qualification: **not run**; Linux implementation has not started.
+- During preparation, live Linux browser / X11 / Wayland qualification was **not run**; the results below supersede that implementation state.
 
 Raw preparation logs are local under ignored `work/`. They contain baseline output, not Linux completion evidence.
 
-## Implementation — Sol updates this section
+## Implementation — 2026-10-23
 
-- [ ] Task 1 — host contracts/package/transport.
-- [ ] Task 2 — owned Chromium and persistent profiles.
-- [ ] Task 3 — task authority, leases and CDP routing.
-- [ ] Task 4 — complete CLI/native adapter and SDK loading.
-- [ ] Task 5 — frame snapshots, browser features and Linux clipboard.
-- [ ] Task 6 — desktop browser and Spaces controller.
-- [ ] Task 7 — installer/artifact/docs/plugins.
-- [ ] Task 8 — CI and actual platform qualification.
-- [ ] Task 9 — independent review, final tests and pushed result.
+- [x] Task 1 — host contracts/package/private framed transport.
+- [x] Task 2 — owned sandboxed Chromium, kernel startup lock and persistent named profiles.
+- [x] Task 3 — task authority, leases, target/session lineage, scoped events/downloads and immediate human revocation.
+- [x] Task 4 — complete CLI/native adapter and matching SDK loading; native bindings retain precedence.
+- [x] Task 5 — frame-aware snapshots, browser surface, cross-round refs and safe X11 clipboard. Native Wayland clipboard returns an explicit pre-mutation unsupported error.
+- [x] Task 6 — personal browsing and authenticated Spaces controller with manual task grants, pause/takeover/resume and inbox adoption.
+- [x] Task 7 — relocatable installer/archive, upgrade/rollback/uninstall contracts, guides/plugins/attribution.
+- [x] Task 8 — every feasible automated Linux/portable CI gate complete. Physical X11/native Wayland and native Windows application qualification remain external gates, recorded in A23/A24/A25.
+- [x] Task 9 — independent review findings resolved; exact receipts, archive checksums and final verification report recorded. Tested runtime pushed to the fork.
 
-Next action: start the prepared Sol implementation with `./scripts/linux/start-sol.sh`, or open this directory in Codex and execute `docs/linux/SOL-ONE-SHOT.md` using `gpt-6.1-sol` / `xhigh`.
+Final tested runtime: `6b1863f48b93697b31d66b703edb904553089fcb`. The clean installed ARM64 archive passed the full unchanged browser suite: **81/81 cases, 1,346 assertions, 0 failures, 0 skips**, using official Chrome for Testing 156.0.8078.47 and Node 22.23.4 under Xvfb. Twenty observed renderer processes had NoNewPrivs=1 and Seccomp=2. Chromium retained its sandbox; the Docker startup allowances are documented separately in VERIFICATION.md. All 74 shipped runtime/SDK/guide/skill/installer/asset files match the current build byte-for-byte.
 
-### Current implementation checkpoint
+The final GitHub Actions matrix at that exact runtime passed **all five jobs**: Linux Node 22 and LTS, native Mac/Windows portable checks, and the dependent qualified artifact gate. Both x86_64 installed browser suites passed **81/81, 1,346 assertions, 0 skips**. The gated x86_64 archive was downloaded and checksum-verified. [CI run 40021709556](https://github.com/BitL8-ByteShort/ego-lite-linux/actions/runs/40021709556).
 
-Host/adapter/controller and packaging now implemented; platform integration adds Linux guides and safe X11 clipboard. Initial real Debian 12 ARM64 Chromium156/Node22 Docker qualification passed: restart persistence (cookie/localStorage/IndexedDB), independent profiles, two CLI identities sharing controlled login, foreign task denial, cross-round Page ledger, relocated archive install/workflow/uninstall retaining data. Xvfb native clipboard gate passed 8/8. Host unit gate last passed 27 tests before latest additions. SDK gate 590 pass, 8 explicit OS/display skips on Mac; native clipboard gates ran on Linux with no skips.
+Final local checks: SDK **602 total, 594 passed, 0 failed, 8 explicit OS/display skips**; host **57/57**; plugins **42/42** and all nine archives extracted outside the checkout. SDK/host types and styles, site validation and registry audits pass; both registry audits reported zero vulnerabilities. Native X11 clipboard/wrapper tests passed **8/8** under Xvfb. Real lifecycle, persistence and concurrent-client fixtures passed. The authenticated controller passed **20 assertions** with actual HTML refresh, explicit task grant, immediate pending-command hard pause, independent B task, delegation and resume. These remain synthetic-display results.
 
-Full upstream E2E is being exercised in isolated `ego-snapshot-e2e` Docker container; initial full run exposed stale-lease rotation (fixed with RED→GREEN regression) and Chrome background-tab rendering/input limitations. A live CDP probe showed background tabs timing out on screenshot while background **new windows** render reliably; task Page creation now requests independent background windows. This preserves default no-activation requests; actual physical desktop focus remains a separate unverified gate. Downloads now use one host-owned `allowAndName` staging area and per-target, per-epoch delivery to private SDK directories.
+Installed qualification used the final ARM64 artifact: **15/15 installer contracts**, an actual changed-code upgrade `8f1cd49` → `6b1863f`, complete old-process termination, changed generation, cookie/localStorage/IndexedDB preservation and profile-retaining uninstall. A separate installed all-form check passed **13 checks across five CLI rounds**, including the desktop launcher under Xvfb, bare stdin, nodejs stdin/-e/file, matching --sdk-path, idempotent stop and uninstall. It ran outside the checkout with a spaced installation prefix after deleting the extracted installer/source directory.
 
-Next actions: finish full E2E inventory and rerun against the current host, repair remaining integration failures, add lifecycle/desktop control qualification, final independent review, regenerate actual artifacts and receipts, complete acceptance ledger, commit/push. Native X11/Wayland desktop and official Mac/Windows app access remain unavailable; Docker/Xvfb are explicitly synthetic.
+The final compatibility fixes permit only the two owned-session viewport methods needed by existing SDK fixtures and disable only Chromium's `PdfGetSaveDataInBlocks` feature so original PDF downloads remain observable through browser download events. The complete final browser suites include the unchanged scrolling and PDF cases. Annotation controls remain enabled. Focused independent reviews found no actionable issue in those fixes or the narrow related-worklet resume/detach authority.
 
-### Reviewed code checkpoint
+Native Mac full suite returned **78/81 with 3 failures, 0 skips**. All three causes reproduce on unchanged upstream `c024c32`; this is a recorded native failure. Native Windows application access and actual physical X11/native Wayland desktops were unavailable. Native Wayland clipboard paste explicitly fails before mutation; plain insertText remains available.
 
-Final-review code findings repaired: kernel flock lifecycle; normal personal download names/destination with temporary task allowance; controller token refresh; explicit human agent-owner grant; populated lastError; installer browser/flock preflight; protected form-value snapshots. Host 52/52, typecheck/style pass. SDK 591 passed, 8 explicit platform/display skips (599 total), audit0, styles/site validation pass. Plugins37/37 and all packages produced. Real lifecycle gate passes; real control20 assertions passes including HTML refresh+manual agent grant. Internal task focus emulation keeps background documents rendering without Target activation (live visibility/screenshot probe passed); actual desktop focus remains unverified. Full final installed81-case run is next; prior full receipt61pass/20fail is superseded only when a complete newer run is recorded.
+The final acceptance ledger and sanitized JSON receipts are committed with VERIFICATION.md. Versioned x64 and ARM64 archives, adjacent checksums and manifests are local under ignored `artifacts/linux/`; raw logs are under ignored `work/linux/`. All containers created for this run were removed. No public release, upstream merge or maintainer contact occurred.
+
+Remaining actions are external qualification only: use the concrete desktop/backend/native-application commands and human checks in [VERIFICATION.md](VERIFICATION.md). Do not restart completed implementation or substitute synthetic-display receipts for physical desktop qualification.
