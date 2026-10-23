@@ -139,7 +139,7 @@ test("task root sessions emulate focus without activating a window and worker se
         method: "Emulation.setFocusEmulationEnabled",
         params: { enabled: true },
         sessionId: "session-1",
-        timeoutMs: 60_000,
+        timeoutMs: 500,
       },
     ],
   );
