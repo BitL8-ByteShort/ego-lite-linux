@@ -44,6 +44,17 @@ jobs:
           sudo mv "$RUNNER_TEMP/chrome-download/chrome-linux64" /opt/ego-chrome
           sudo chown -R root:root /opt/ego-chrome
           sudo chmod 4755 /opt/ego-chrome/chrome_sandbox
+          # Ubuntu restricts user namespaces for downloaded browser paths.
+          # Permit only this root-owned executable, following Chromium guidance:
+          # https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md
+          sudo tee /etc/apparmor.d/ego-cft-qualification > /dev/null <<'APPARMOR'
+          abi <abi/4.0>,
+          include <tunables/global>
+          profile ego-cft-qualification /opt/ego-chrome/chrome flags=(unconfined) {
+            userns,
+          }
+          APPARMOR
+          sudo apparmor_parser -r /etc/apparmor.d/ego-cft-qualification
       - name: Check unprivileged browser prerequisite
         run: |
           test "$(id -u)" -ne 0

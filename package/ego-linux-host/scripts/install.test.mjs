@@ -272,6 +272,30 @@ test("versioned archive has matching external checksum and complete manifest", a
       name.includes("node_modules"),
     ),
   );
+  const overridden = await packageArtifact({
+    hostDir: path.join(root, "source host 0.1.0-dev.0"),
+    sdkDir: path.join(root, "source sdk 0.1.0-dev.0"),
+    license: path.join(root, "LICENSE"),
+    attribution: path.join(root, "absent"),
+    outputDir: path.join(root, "temporary next version"),
+    version: "0.1.0-dev.1",
+    sourceCommit: "a".repeat(40),
+  });
+  assert.equal(overridden.manifest.version, "0.1.0-dev.1");
+  assert.equal(overridden.manifest.gitCommit, "a".repeat(40));
+  assert.equal(
+    JSON.parse(
+      await fs.readFile(
+        path.join(root, "source host 0.1.0-dev.0/package.json"),
+        "utf8",
+      ),
+    ).version,
+    "0.1.0-dev.0",
+  );
+  assert.equal(
+    overridden.manifest.files["host/dist/src/cli.js"].sha256,
+    result.manifest.files["host/dist/src/cli.js"].sha256,
+  );
 });
 
 test("first-install failure leaves no managed payload and --no-desktop omits desktop integration", async (t) => {

@@ -44,6 +44,8 @@ export async function packageArtifact({
   attribution = path.join(repository, "docs/linux/ATTRIBUTION.md"),
   arch = process.arch,
   build = false,
+  version,
+  sourceCommit,
 } = {}) {
   if (!["x64", "arm64"].includes(arch))
     throw new Error(`Unsupported artifact architecture: ${arch}`);
@@ -54,6 +56,13 @@ export async function packageArtifact({
   const hostPackage = JSON.parse(
     await fs.readFile(path.join(hostDir, "package.json"), "utf8"),
   );
+  if (version !== undefined) hostPackage.version = version;
+  if (
+    sourceCommit !== undefined &&
+    sourceCommit !== null &&
+    !/^[a-f0-9]{40}$/.test(sourceCommit)
+  )
+    throw new Error("Source commit must be a full Git SHA");
   const name = `ego-lite-linux-${hostPackage.version}-linux-${arch}`;
   if (
     !/^ego-lite-linux-[0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9.-]+)?-linux-(x64|arm64)$/.test(
@@ -73,9 +82,9 @@ export async function packageArtifact({
         path.join(root, "host", directory),
       );
     // Runtime modules may include desktop static files copied by the host build.
-    await fs.copyFile(
-      path.join(hostDir, "package.json"),
+    await fs.writeFile(
       path.join(root, "host/package.json"),
+      `${JSON.stringify(hostPackage, null, 2)}\n`,
     );
     await fs.mkdir(path.join(root, "host/scripts"));
     for (const script of ["install.mjs", "uninstall.mjs"])
@@ -104,6 +113,7 @@ export async function packageArtifact({
       encoding: "utf8",
     });
     if (git.status === 0) gitCommit = git.stdout.trim();
+    if (sourceCommit !== undefined) gitCommit = sourceCommit;
     const manifest = await writeManifest(root, {
       version: hostPackage.version,
       platform: "linux",
