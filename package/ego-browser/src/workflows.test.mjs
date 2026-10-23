@@ -12,8 +12,8 @@ function workflow(name) {
   );
 }
 
-function releaseGuards(github) {
-  const source = workflow("ci");
+function releaseGuards(github, source = workflow("ci")) {
+  source = source.replace(/\r\n/g, "\n");
   const expressions = [
     source.match(/SHOULD_RELEASE: \$\{\{\s*(.*?)\s*\}\}/)?.[1],
     source.match(/^  release:\n    if: (.+)$/m)?.[1],
@@ -64,8 +64,8 @@ test("beta and stable tag pushes retain both release guards", () => {
   }
 });
 
-function runSourceGuard(branch) {
-  const source = workflow("main-pr-source");
+function runSourceGuard(branch, source = workflow("main-pr-source")) {
+  source = source.replace(/\r\n/g, "\n");
   const script = source.split("        run: |\n")[1];
   assert.ok(script, "source guard must have a shell step");
   const env = { ...process.env };
@@ -91,10 +91,32 @@ test("main source guard treats shell syntax in branch names as data", () => {
   const directory = mkdtempSync(join(tmpdir(), "ego-branch-name-"));
   const marker = join(directory, "unexpected-command");
   try {
-    const result = runSourceGuard(`feature/$(touch\${IFS}${marker})`);
+    const shellMarker = marker.replaceAll("\\", "/");
+    const result = runSourceGuard(`feature/$(touch\${IFS}${shellMarker})`);
     assert.equal(result.status, 1);
     assert.equal(existsSync(marker), false, "branch name executed a command");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("CRLF workflows preserve release guard decisions", () => {
+  const source = workflow("ci").replace(/\r?\n/g, "\r\n");
+  for (const [event_name, ref, expected] of [
+    ["push", "refs/heads/dev", false],
+    ["pull_request", "refs/pull/1/merge", false],
+    ["push", "refs/tags/v2.0.0", true],
+    ["push", "refs/tags/v2.0.0-beta.9", true],
+  ]) {
+    assert.deepEqual(releaseGuards({ event_name, ref }, source), [
+      expected,
+      expected,
+    ]);
+  }
+});
+
+test("CRLF source guards still execute allow and reject paths", () => {
+  const source = workflow("main-pr-source").replace(/\r?\n/g, "\r\n");
+  assert.equal(runSourceGuard("dev", source).status, 0);
+  assert.equal(runSourceGuard("feature/change", source).status, 1);
 });

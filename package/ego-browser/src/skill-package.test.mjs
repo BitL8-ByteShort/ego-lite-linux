@@ -270,7 +270,7 @@ test("project Agent and Codex entries share the canonical Skill", async () => {
   for (const directory of [".agents", ".codex"]) {
     assert.equal(
       await readlink(join(repoRoot, directory, "skills/ego-browser")),
-      "../../skills/ego-browser",
+      join("..", "..", "skills", "ego-browser"),
     );
   }
 });

@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { copyFile, mkdtemp, realpath, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { runMain } from "../dist/src/run.js";
 
@@ -347,13 +351,23 @@ test("the direct CLI rejects removed placeholder commands", async () => {
   }
 });
 
-test("the direct CLI prints an ordinary uncaught error once", () => {
+test("the direct CLI prints an ordinary uncaught error once", async () => {
   const entry = new URL("../dist/out/index.js", import.meta.url);
-  const result = spawnSync(process.execPath, [entry.pathname], {
-    input: 'throw new Error("single-error-probe")\n',
-    encoding: "utf8",
-  });
-
-  assert.equal(result.status, 1);
-  assert.equal(result.stderr.match(/single-error-probe/g)?.length, 1);
+  const temporary = await realpath(
+    await mkdtemp(join(tmpdir(), "ego-cli # spaces-")),
+  );
+  try {
+    const copied = join(temporary, "SDK # with spaces.mjs");
+    await copyFile(entry, copied);
+    for (const url of [entry, pathToFileURL(copied)]) {
+      const result = spawnSync(process.execPath, [fileURLToPath(url)], {
+        input: 'throw new Error("single-error-probe")\n',
+        encoding: "utf8",
+      });
+      assert.equal(result.status, 1);
+      assert.equal(result.stderr.match(/single-error-probe/g)?.length, 1);
+    }
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
 });
