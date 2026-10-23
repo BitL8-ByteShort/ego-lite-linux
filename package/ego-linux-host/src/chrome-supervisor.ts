@@ -12,6 +12,10 @@ export function chromeArguments(profileDir: string, headless: boolean) {
     "--no-default-browser-check",
     "--disable-background-networking",
     "--disable-component-update",
+    // Chunked PDF saving uses a native file writer instead of DownloadManager,
+    // so the SDK cannot observe the original-document download. Keep the
+    // viewer's standard download path across Chrome field-trial defaults.
+    "--disable-features=PdfGetSaveDataInBlocks",
     "--disable-session-crashed-bubble",
     "--disable-background-timer-throttling",
     "--disable-renderer-backgrounding",

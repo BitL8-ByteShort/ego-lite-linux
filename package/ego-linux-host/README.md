@@ -14,6 +14,8 @@ node package/ego-linux-host/bin/ego-lite.mjs --profile default
 
 The launcher opens personal browsing and an authenticated Spaces window. Sign in normally in personal browsing. Sign-ins survive browser and daemon restarts. Tasks in the same named profile deliberately share cookies, storage and website actions; their isolation is tab/command ownership. Use another `--profile work` for separate accounts.
 
+The host disables Chromium's `PdfGetSaveDataInBlocks` feature so original-document PDF saves use the download events observed by the SDK. Chrome field trials can otherwise select a native file-writer path that bypasses those events. The PDF viewer and annotation tools remain enabled; see the [Chromium feature definition](https://chromium.googlesource.com/chromium/src/+/main/pdf/pdf_features.cc) and the live verification report.
+
 Spaces supports creating/opening profiles, personal browsing, creating a task and explicitly granting it to an agent identity, reveal, hard pause/take control, resume, close and browser shutdown. Restored or unknown tabs remain in your inbox until you explicitly assign them. Refreshing the controller retains its private tab session. Wayland activation remains subject to compositor policy.
 
 Each agent workflow retains one random non-secret identity for its lifetime:
