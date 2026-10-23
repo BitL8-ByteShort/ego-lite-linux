@@ -20,7 +20,8 @@ jobs:
         node: [22, "lts/*"]
     env:
       CI: "true"
-      EGO_LINUX_CHROME_PATH: /usr/bin/google-chrome
+      EGO_LINUX_CHROME_PATH: /opt/ego-chrome/chrome
+      CHROME_DEVEL_SANDBOX: /opt/ego-chrome/chrome_sandbox
       EGO_LINUX_HEADLESS: "1"
       EGO_LINUX_AGENT_ID: ci-linux-qualification
     steps:
@@ -34,6 +35,15 @@ jobs:
             package/ego-linux-host/package-lock.json
       - name: Install display and clipboard fixtures
         run: sudo apt-get update && sudo apt-get install -y xvfb xclip python3 libx11-6 libxfixes3 util-linux
+      # Pin the browser actually qualified locally; runner images can lag stable.
+      # Source: https://googlechromelabs.github.io/chrome-for-testing/
+      - name: Install sandboxed Chrome for Testing 156
+        run: |
+          curl --fail --location --retry 3 https://storage.googleapis.com/chrome-for-testing-public/156.0.8078.47/linux64/chrome-linux64.zip --output "$RUNNER_TEMP/chrome.zip"
+          unzip -q "$RUNNER_TEMP/chrome.zip" -d "$RUNNER_TEMP/chrome-download"
+          sudo mv "$RUNNER_TEMP/chrome-download/chrome-linux64" /opt/ego-chrome
+          sudo chown -R root:root /opt/ego-chrome
+          sudo chmod 4755 /opt/ego-chrome/chrome_sandbox
       - name: Check unprivileged browser prerequisite
         run: |
           test "$(id -u)" -ne 0

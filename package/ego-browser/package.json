@@ -11,7 +11,7 @@
     "build": "node scripts/build.mjs",
     "check:skill-translation": "node scripts/check-skill-translation.mjs",
     "e2e": "node scripts/run-real-browser-e2e.mjs",
-    "prepare": "if [ \"$CI\" = \"true\" ]; then exit 0; fi; cd ../.. && lefthook install",
+    "prepare": "node -e \"if (process.env.CI !== 'true') require('node:child_process').execSync('lefthook install', { cwd: '../..', stdio: 'inherit' });\"",
     "style:check": "prettier --check \"src/**/*.{ts,mjs,js}\" \"scripts/**/*.{ts,mjs,js}\" package.json README.md",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && npm run check:skill-translation && npm run typecheck && node --test \"src/**/*.test.mjs\"",

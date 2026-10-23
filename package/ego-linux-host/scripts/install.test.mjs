@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import {
-  install,
+  install as installProduct,
   extractArchive,
   verifyPayload,
   managedPaths,
@@ -19,6 +19,16 @@ import { uninstall } from "./uninstall.mjs";
 import { packageArtifact } from "./package.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+
+// File/transaction fixtures do not depend on the runner's installed browser.
+// Dedicated prerequisite tests below still exercise failed/old/missing probes.
+async function install(options) {
+  const env = options.env || {
+    ...process.env,
+    EGO_LINUX_CHROME_PATH: await fakeBrowser(path.dirname(options.prefix)),
+  };
+  return installProduct({ ...options, env });
+}
 
 async function temporary(t) {
   const directory = await fs.mkdtemp(
