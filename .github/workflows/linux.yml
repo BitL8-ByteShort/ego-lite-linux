@@ -53,6 +53,9 @@ jobs:
           echo "XDG_RUNTIME_DIR=$RUNNER_TEMP/ego-runtime" >> "$GITHUB_ENV"
           echo "XDG_DATA_HOME=$RUNNER_TEMP/ego-data" >> "$GITHUB_ENV"
           echo "XDG_CONFIG_HOME=$RUNNER_TEMP/ego-config" >> "$GITHUB_ENV"
+      - name: Verify sandboxed browser startup before SDK qualification
+        run: |
+          timeout 20s "$EGO_LINUX_CHROME_PATH" --headless=new --no-first-run --no-default-browser-check --user-data-dir="$RUNNER_TEMP/chrome-startup-probe" --dump-dom about:blank
       - name: SDK portable checks
         run: |
           node --test scripts/check-branch-freshness.test.mjs

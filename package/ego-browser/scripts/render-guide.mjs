@@ -25,7 +25,11 @@ export function renderGuide(source, { platform = null, name = "guide" } = {}) {
   if (platform !== null && !guidePlatforms.includes(platform)) {
     throw new Error(`unknown guide platform ${JSON.stringify(platform)}`);
   }
-  const match = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/.exec(source);
+  // Git may check Markdown out with CRLF on Windows. Parse and emit one
+  // canonical LF representation without changing the source file on disk.
+  const match = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/.exec(
+    source.replace(/\r\n/g, "\n"),
+  );
   const version = match && /^version: "([^"]+)"$/m.exec(match[1])?.[1];
   if (!version) {
     throw new Error(`${name} needs frontmatter with a version`);
@@ -52,35 +56,38 @@ export function selectPlatform(markdown, platform, name = "guide") {
   const lines = [];
   let keep = null; // null outside a block, boolean inside
   let openedAt = 0;
-  markdown.split("\n").forEach((line, index) => {
-    const open = platformPattern.exec(line);
-    if (open) {
-      if (keep !== null) {
-        throw new Error(
-          `${name}:${index + 1}: platform blocks do not nest (opened at line ${openedAt})`,
-        );
-      }
-      const platforms = open[1].split(",").map((entry) => entry.trim());
-      for (const entry of platforms) {
-        if (!guidePlatforms.includes(entry)) {
+  markdown
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .forEach((line, index) => {
+      const open = platformPattern.exec(line);
+      if (open) {
+        if (keep !== null) {
           throw new Error(
-            `${name}:${index + 1}: unknown platform ${JSON.stringify(entry)}; use ${guidePlatforms.join(", ")}`,
+            `${name}:${index + 1}: platform blocks do not nest (opened at line ${openedAt})`,
           );
         }
+        const platforms = open[1].split(",").map((entry) => entry.trim());
+        for (const entry of platforms) {
+          if (!guidePlatforms.includes(entry)) {
+            throw new Error(
+              `${name}:${index + 1}: unknown platform ${JSON.stringify(entry)}; use ${guidePlatforms.join(", ")}`,
+            );
+          }
+        }
+        keep = platform === null || platforms.includes(platform);
+        openedAt = index + 1;
+        return;
       }
-      keep = platform === null || platforms.includes(platform);
-      openedAt = index + 1;
-      return;
-    }
-    if (endPattern.test(line)) {
-      if (keep === null) {
-        throw new Error(`${name}:${index + 1}: platform block closed twice`);
+      if (endPattern.test(line)) {
+        if (keep === null) {
+          throw new Error(`${name}:${index + 1}: platform block closed twice`);
+        }
+        keep = null;
+        return;
       }
-      keep = null;
-      return;
-    }
-    if (keep !== false) lines.push(line);
-  });
+      if (keep !== false) lines.push(line);
+    });
   if (keep !== null) {
     throw new Error(`${name}:${openedAt}: platform block is never closed`);
   }

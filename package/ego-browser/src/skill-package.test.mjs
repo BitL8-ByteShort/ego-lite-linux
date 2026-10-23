@@ -23,7 +23,7 @@ const platformMarker = /^\s*<!--\s*\/?platform\b.*-->\s*$/gm;
 
 test("the bundled usage guide is the unwrapped source guide between version and end markers", async () => {
   const bundled = await readFile(join(outDir, "ego-browser/SKILL.md"), "utf8");
-  const source = await readFile(guideSource, "utf8");
+  const source = (await readFile(guideSource, "utf8")).replace(/\r\n/g, "\n");
   const version = /^version: "([^"]+)"$/m.exec(source)[1];
   const lines = bundled.trimEnd().split("\n");
 
@@ -52,7 +52,7 @@ test("the bundled usage guide is the unwrapped source guide between version and 
 });
 
 test("each platform guide keeps only its own passages", async () => {
-  const source = await readFile(guideSource, "utf8");
+  const source = (await readFile(guideSource, "utf8")).replace(/\r\n/g, "\n");
   const version = /^version: "([^"]+)"$/m.exec(source)[1];
   const all = await readFile(join(outDir, "ego-browser/SKILL.md"), "utf8");
   const sourceBody = source.replace(/^---\n[\s\S]*?\n---\n/, "");
@@ -137,6 +137,49 @@ test("renderGuide selects platform blocks and strips the markers", () => {
     () => renderGuide(source, { platform: "freebsd" }),
     /unknown guide platform/,
   );
+});
+
+test("CRLF guide sources render the same frontmatter, platform blocks and code fences as LF", () => {
+  const source = [
+    "---",
+    'version: "9.9.9"',
+    "---",
+    "Wrapped prose",
+    "continues here.",
+    "",
+    "<!-- platform: windows -->",
+    "## Windows",
+    "",
+    "```powershell",
+    'Write-Output "世界"',
+    "```",
+    "<!-- /platform -->",
+    "",
+    "<!-- platform: linux -->",
+    "Linux only.",
+    "<!-- /platform -->",
+    "",
+  ].join("\n");
+  const windowsSource = source.replaceAll("\n", "\r\n");
+  for (const platform of [null, ...guidePlatforms]) {
+    assert.equal(
+      renderGuide(windowsSource, { platform }),
+      renderGuide(source, { platform }),
+    );
+    assert.equal(
+      selectPlatform(windowsSource, platform),
+      selectPlatform(source, platform),
+    );
+  }
+  for (const ending of ["\n", "\r\n"]) {
+    assert.throws(
+      () =>
+        renderGuide(
+          ["---", "version: missing-quotes", "---", "Body"].join(ending),
+        ),
+      /needs frontmatter with a version/,
+    );
+  }
 });
 
 test("selectPlatform rejects malformed platform blocks", () => {
