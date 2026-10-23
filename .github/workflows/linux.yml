@@ -149,6 +149,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Install Windows archive tools for the complete plugin checks
+        if: runner.os == 'Windows'
+        run: choco install zip unzip --yes --no-progress
       - uses: actions/setup-node@v4
         with:
           node-version: 22

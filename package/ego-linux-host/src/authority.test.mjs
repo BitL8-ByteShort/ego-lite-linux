@@ -29,6 +29,14 @@ test("policy rejects global writes, nested transports and embedded foreign targe
       ),
     );
 });
+test("owned-session policy permits viewport metrics without general emulation authority", () => {
+  assert.doesNotThrow(() => assertMethod("Emulation.setDeviceMetricsOverride"));
+  assert.doesNotThrow(() =>
+    assertMethod("Emulation.clearDeviceMetricsOverride"),
+  );
+  assert.throws(() => assertMethod("Emulation.setLocaleOverride"));
+  assert.throws(() => assertMethod("Page.bringToFront"));
+});
 test("browser generation invalidates capability and task crash restoration defaults to hard user pause", () => {
   const r = new TaskRegistry("one"),
     t = r.create("task", "default", "A"),
