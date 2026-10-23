@@ -298,11 +298,39 @@ test("scoped child attach preserves the SDK debugger wait so network tracking st
   const auto = calls.find((c) => c.method === "Target.setAutoAttach");
   assert.equal(auto.params.waitForDebuggerOnStart, true);
   assert.equal(auto.sessionId, "session-1");
-  assert.deepEqual(auto.params.filter, [
-    { type: "iframe", exclude: false },
-    { type: "worker", exclude: false },
-    { exclude: true },
-  ]);
+  assert.deepEqual(auto.params.filter, [{}]);
+});
+test("related worklets can be resumed and detached without gaining general task authority", async () => {
+  const { command, chrome, calls, events } = await setup();
+  chrome.bridge.onEvent({
+    method: "Target.attachedToTarget",
+    sessionId: "session-1",
+    params: {
+      sessionId: "child",
+      waitingForDebugger: true,
+      targetInfo: { targetId: "worklet", type: "audio_worklet" },
+    },
+  });
+  assert.equal(events.at(-1).event.params.sessionId, "child");
+  await command("Runtime.runIfWaitingForDebugger", {}, "child");
+  await assert.rejects(
+    command("Runtime.evaluate", { expression: "1" }, "child"),
+    { error_code: "EGO_CDP_SEND_FAILED" },
+  );
+  await assert.rejects(
+    command("Target.attachToTarget", { targetId: "worklet" }),
+    {
+      error_code: "EGO_CDP_SEND_FAILED",
+    },
+  );
+  await command("Target.detachFromTarget", { sessionId: "child" });
+  assert.equal(calls.at(-1).sessionId, "session-1");
+  await assert.rejects(
+    command("Runtime.runIfWaitingForDebugger", {}, "child"),
+    {
+      error_code: "EGO_CDP_SEND_FAILED",
+    },
+  );
 });
 test("renderer focus setup cannot turn successful target attachment into a transport failure", async () => {
   const calls = [];

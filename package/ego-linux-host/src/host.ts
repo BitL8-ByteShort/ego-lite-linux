@@ -19,6 +19,7 @@ type Session = {
   parent?: string;
   internal?: boolean;
   automationEnabled?: boolean;
+  releaseOnly?: boolean;
 };
 export class LinuxHost {
   readonly registry: TaskRegistry;
@@ -226,14 +227,18 @@ export class LinuxHost {
     if (
       e.method === "Target.attachedToTarget" &&
       parent &&
-      ["iframe", "worker"].includes(info?.type)
+      !parent.releaseOnly &&
+      typeof info?.targetId === "string" &&
+      typeof e.params?.sessionId === "string"
     ) {
-      this.targets.set(info.targetId, parent.taskId);
+      const releaseOnly = !["iframe", "worker"].includes(info.type);
+      if (!releaseOnly) this.targets.set(info.targetId, parent.taskId);
       this.sessions.set(e.params.sessionId, {
         ...parent,
         targetId: info.targetId,
         parent: e.sessionId,
         automationEnabled: true,
+        releaseOnly,
       });
     }
     if (e.sessionId) {
@@ -528,6 +533,11 @@ export class LinuxHost {
     let s: Session | undefined;
     if (sid) s = this.session(c, l, sid);
     if (typeof method !== "string") invalid("CDP method required");
+    if (s?.releaseOnly && method !== "Runtime.runIfWaitingForDebugger")
+      throw egoError(
+        "EGO_CDP_SEND_FAILED",
+        "Related target session permits debugger release only",
+      );
     validateEmbedded(
       p,
       (id) => this.target(l, id),
@@ -650,11 +660,10 @@ export class LinuxHost {
           autoAttach: !!p.autoAttach,
           waitForDebuggerOnStart: p.waitForDebuggerOnStart === true,
           flatten: true,
-          filter: [
-            { type: "iframe", exclude: false },
-            { type: "worker", exclude: false },
-            { exclude: true },
-          ],
+          // Chrome can pause excluded related worklets without giving the SDK
+          // a session to resume them. Observe all related child attachments;
+          // non-frame/worker sessions receive release/detach authority only.
+          filter: [{}],
         },
         sid,
       );
