@@ -657,7 +657,7 @@ export class LinuxHost {
         method,
         {
           autoAttach: !!p.autoAttach,
-          waitForDebuggerOnStart: false,
+          waitForDebuggerOnStart: p.waitForDebuggerOnStart === true,
           flatten: true,
           filter: [
             { type: "iframe", exclude: false },
@@ -668,8 +668,8 @@ export class LinuxHost {
         sid,
       );
     }
-    // CDP Page download behavior changes the entire default context. Scope tracking
-    // is via per-page download events; the private download directory is host-owned.
+    // Coordinate shared-context download allowance while keeping destinations
+    // and completed-file delivery scoped to the verified task.
     if (method === "Page.setDownloadBehavior") {
       if (!["allow", "default"].includes(p.behavior))
         invalid("Unsupported download behavior");

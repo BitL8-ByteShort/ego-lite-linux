@@ -52,13 +52,45 @@ async function command(args, extra = {}) {
   return stdout;
 }
 const assertCode = 'const assert=(await import("node:assert/strict")).default;';
-const cookie = () => {};
+async function rendererSandbox(browserPid) {
+  const seen = new Set();
+  const renderers = [];
+  const visit = async (pid) => {
+    if (seen.has(pid)) return;
+    seen.add(pid);
+    try {
+      const command = await readFile(`/proc/${pid}/cmdline`, "utf8");
+      if (command.includes("--type=renderer")) {
+        const status = await readFile(`/proc/${pid}/status`, "utf8");
+        renderers.push({
+          noNewPrivs: Number(/^NoNewPrivs:\s+(\d+)/m.exec(status)?.[1]),
+          seccomp: Number(/^Seccomp:\s+(\d+)/m.exec(status)?.[1]),
+        });
+      }
+      const children = await readFile(
+        `/proc/${pid}/task/${pid}/children`,
+        "utf8",
+      );
+      for (const child of children.trim().split(/\s+/).filter(Boolean))
+        await visit(Number(child));
+    } catch {}
+  };
+  await visit(browserPid);
+  assert.ok(renderers.length > 0, "actual owned renderer processes exist");
+  assert.ok(
+    renderers.every((r) => r.noNewPrivs === 1 && r.seccomp === 2),
+    "owned renderers have kernel no-new-privileges and seccomp filtering",
+  );
+  return renderers;
+}
+let sandboxRenderers = [];
 try {
   await run(
     `${assertCode}const t=await taskSpace('persistent');const p=t.page('p1');await p.goto(${JSON.stringify(url + "/login")});await p.evaluate(async()=>{localStorage.setItem('fixture','durable');await new Promise((r,j)=>{const q=indexedDB.open('fixture',1);q.onupgradeneeded=()=>q.result.createObjectStore('data');q.onerror=j;q.onsuccess=()=>{const db=q.result;const tx=db.transaction('data','readwrite');tx.objectStore('data').put('durable','key');tx.oncomplete=()=>{db.close();r()};};});});console.log(await p.snapshot());`,
   );
   const status = JSON.parse(await command(["status"]));
   assert.ok(status.generation);
+  sandboxRenderers = await rendererSandbox(status.browserPid);
   await command(["stop"]);
   await run(
     `${assertCode}const t=await taskSpace('restart-check');const p=t.page('p1');await p.goto(${JSON.stringify(url)});assert.match(await p.evaluate(()=>document.cookie),/fixtureLogin=yes/);assert.equal(await p.evaluate(()=>localStorage.getItem('fixture')),'durable');assert.equal(await p.evaluate(async()=>new Promise((r,j)=>{const q=indexedDB.open('fixture',1);q.onerror=j;q.onsuccess=()=>{const db=q.result;const tx=db.transaction('data');const get=tx.objectStore('data').get('key');get.onsuccess=()=>{db.close();r(get.result)};};})),'durable');ego.useTaskSpace(t.spaceId);await ego.closeTaskSpace();console.log('restart persistence passed');`,
@@ -106,6 +138,7 @@ try {
         sandbox: {
           launch:
             "unprivileged, default sandbox, private pipe, no no-sandbox flag",
+          renderers: sandboxRenderers,
         },
         persistence: [
           "cookie",

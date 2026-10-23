@@ -288,3 +288,19 @@ test("explicit host policy errors retain their native error callback", async () 
     native: { message: "Foreign session", error_code: "EGO_CDP_SEND_FAILED" },
   });
 });
+test("scoped child attach preserves the SDK debugger wait so network tracking starts before navigation", async () => {
+  const { command, calls } = await setup();
+  await command("Target.setAutoAttach", {
+    autoAttach: true,
+    flatten: true,
+    waitForDebuggerOnStart: true,
+  });
+  const auto = calls.find((c) => c.method === "Target.setAutoAttach");
+  assert.equal(auto.params.waitForDebuggerOnStart, true);
+  assert.equal(auto.sessionId, "session-1");
+  assert.deepEqual(auto.params.filter, [
+    { type: "iframe", exclude: false },
+    { type: "worker", exclude: false },
+    { exclude: true },
+  ]);
+});
