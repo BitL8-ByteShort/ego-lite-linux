@@ -1,10 +1,6 @@
 import { cdp, js } from "../cdp-eval.js";
 import { browserCdp } from "../browser-runtime.js";
-import {
-  ElementResolutionError,
-  buildSelectorCenterJs,
-  isRawSelector,
-} from "../element-resolver.js";
+import { buildSelectorCenterJs, isRawSelector } from "../element-resolver.js";
 import { elementCenter } from "./observe.js";
 import { resolveAndCall } from "./element-ops.js";
 
@@ -242,10 +238,11 @@ function inputEventDelay(ms = INPUT_EVENT_DELAY_MS) {
 
 /**
  * Resolve the click point and install the trusted-click probe before any
- * input is dispatched. A plain CSS selector does both in the one
- * `Runtime.evaluate` that already resolves it; refs, locators, offsets, and
- * coordinates resolve first and install the probe in a call of their own
- * rather than risk a replayed click. Without native bindings there is no
+ * input is dispatched. A plain CSS selector found in the default session does
+ * both in the one `Runtime.evaluate` that resolves it; refs, locators,
+ * offsets, coordinates, and a selector the fast path did not find resolve
+ * through the shared resolver first and install the probe in a call of their
+ * own rather than risk a replayed click. Without native bindings there is no
  * fallback, so no probe is installed.
  */
 async function resolveClickTarget(target: MouseTarget): Promise<ClickTarget> {
@@ -273,16 +270,13 @@ async function resolveRawSelectorClickTarget(
     returnByValue: true,
     awaitPromise: false,
   });
-  // An invalid selector or an unexpected value is reported by the shared
-  // resolver, which evaluates the same selector again.
+  // No match in the default session, an invalid selector, or an unexpected
+  // value: hand the selector to the shared resolver, which searches the
+  // sessions it knows about and reports a missing element with its own
+  // wording. The probe was not installed in that case, so the generic path
+  // installs one after resolving.
   if (result.exceptionDetails) return null;
   const value = result.result?.value;
-  if (value === null) {
-    throw new ElementResolutionError(
-      `Element not found: ${selector}`,
-      "transient",
-    );
-  }
   if (typeof value?.x !== "number" || typeof value?.y !== "number") {
     return null;
   }

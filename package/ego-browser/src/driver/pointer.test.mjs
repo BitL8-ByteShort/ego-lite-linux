@@ -339,9 +339,67 @@ test("click rethrows a dispatch timeout when the probe has no element to fall ba
   }
 });
 
-test("click reports a missing CSS selector as a transient resolution error", async () => {
+test("click falls back to the shared resolver when the fast path finds no element", async () => {
+  // The combined resolve-and-probe evaluate searches the default session only.
+  // A miss there must not be reported as "not found": the shared resolver
+  // decides, and when it resolves the element the probe is installed in a
+  // call of its own before any input.
+  const calls = [];
+  let evaluations = 0;
   const restore = setOverrides({
-    cdpOverride(method) {
+    cdpOverride(method, params) {
+      calls.push({ method, params });
+      if (method === "Runtime.evaluate") {
+        evaluations += 1;
+        if (evaluations === 1) return { result: { value: null } };
+        if (params.expression.includes("__egoBrowserInputProbes")) {
+          return { result: { value: true } };
+        }
+        return { result: { value: { x: 70, y: 80 } } };
+      }
+      return {};
+    },
+  });
+  try {
+    await withFakeEgo(() => click("#inside-frame"));
+  } finally {
+    restore();
+  }
+
+  assert.deepEqual(methodSequence(calls), [
+    "Runtime.evaluate",
+    "Runtime.evaluate",
+    "Runtime.evaluate",
+    "Input.dispatchMouseEvent:mouseMoved",
+    "Input.dispatchMouseEvent:mousePressed",
+    "Input.dispatchMouseEvent:mouseReleased",
+  ]);
+  assert(
+    isProbeExpression(calls[0]),
+    "the fast path tried to resolve and probe at once",
+  );
+  assert.equal(
+    isProbeExpression(calls[1]),
+    false,
+    "the shared resolver evaluates the selector without a probe",
+  );
+  assert(isProbeExpression(calls[2]), "the probe is installed before input");
+  assert.match(calls[2].params.expression, /\{"x":70,"y":80\}/);
+  assert.deepEqual(
+    calls.slice(3).map((call) => [call.params.x, call.params.y]),
+    [
+      [70, 80],
+      [70, 80],
+      [70, 80],
+    ],
+  );
+});
+
+test("click reports a selector missing from every session with the resolver's wording", async () => {
+  const calls = [];
+  const restore = setOverrides({
+    cdpOverride(method, params) {
+      calls.push({ method, params });
       if (method === "Runtime.evaluate") return { result: { value: null } };
       return {};
     },
@@ -359,4 +417,9 @@ test("click reports a missing CSS selector as a transient resolution error", asy
   } finally {
     restore();
   }
+  assert.deepEqual(
+    methodSequence(calls),
+    ["Runtime.evaluate", "Runtime.evaluate"],
+    "the fast path misses, the shared resolver reports",
+  );
 });
