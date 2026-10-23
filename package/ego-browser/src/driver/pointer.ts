@@ -289,9 +289,13 @@ function newProbeId(kind: string) {
 
 /**
  * Page-side click probe: remembers the element under `pointExpression` and
- * whether a trusted click reached it. The listener removes itself on the
- * first matching click, and the whole probe removes itself after
- * CLICK_PROBE_TTL_MS so an acknowledged click never has to read it back.
+ * whether a trusted click reached it. The first matching trusted click
+ * records itself and drops the listener but keeps the entry, so a dispatch
+ * that still times out can read that the click landed. `dispose()` removes
+ * the listener, the timer, and the registry entry; the CLICK_PROBE_TTL_MS
+ * timer runs it after an acknowledged click (which never reads the probe
+ * back) and the timeout path runs it when it reads the probe, so no closure
+ * or element reference outlives the gesture.
  */
 function clickProbeInstallJs(id: string, pointExpression: string) {
   return `
@@ -301,6 +305,7 @@ function clickProbeInstallJs(id: string, pointExpression: string) {
     probe.dispose = () => {
       document.removeEventListener("click", probe.handler, true);
       clearTimeout(probe.timer);
+      delete window.__egoBrowserInputProbes[${JSON.stringify(id)}];
     };
     probe.handler = (event) => {
       if (
@@ -308,13 +313,10 @@ function clickProbeInstallJs(id: string, pointExpression: string) {
         (event.target === probe.target || probe.target.contains(event.target))
       ) {
         probe.seen = true;
-        probe.dispose();
+        document.removeEventListener("click", probe.handler, true);
       }
     };
-    probe.timer = setTimeout(() => {
-      probe.dispose();
-      delete window.__egoBrowserInputProbes[${JSON.stringify(id)}];
-    }, ${JSON.stringify(CLICK_PROBE_TTL_MS)});
+    probe.timer = setTimeout(probe.dispose, ${JSON.stringify(CLICK_PROBE_TTL_MS)});
     document.addEventListener("click", probe.handler, true);
     window.__egoBrowserInputProbes[${JSON.stringify(id)}] = probe;
   `;
@@ -360,7 +362,6 @@ async function finishClickProbe(
         const probe = probes[${JSON.stringify(id)}];
         if (!probe) return { seen: false, fallback: false };
         probe.dispose();
-        delete probes[${JSON.stringify(id)}];
         if (probe.seen || !probe.target) return { seen: probe.seen, fallback: false };
         const target = probe.target;
         const init = {

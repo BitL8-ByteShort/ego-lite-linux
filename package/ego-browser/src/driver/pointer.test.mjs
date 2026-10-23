@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import vm from "node:vm";
 
 import { setOverrides } from "../../dist/src/state.js";
 import { click, scroll } from "../../dist/src/driver/pointer.js";
@@ -197,7 +198,11 @@ function clickOverride({ inputTimesOut = false, probeResult } = {}) {
     cdpOverride(method, params) {
       calls.push({ method, params });
       if (method === "Runtime.evaluate") {
-        if (params.expression.includes("probe.dispose();\n        delete")) {
+        if (
+          params.expression.includes(
+            "const probes = window.__egoBrowserInputProbes",
+          )
+        ) {
           // finishClickProbe
           return { result: { value: probeResult } };
         }
@@ -243,7 +248,7 @@ test("click resolves a CSS selector and installs its probe in one page call, the
   );
   assert.match(
     calls[0].params.expression,
-    /setTimeout\(\(\) => \{\s*probe\.dispose\(\);/,
+    /setTimeout\(probe\.dispose, 5000\)/,
     "the probe removes itself so an acknowledged click never reads it back",
   );
   assert.deepEqual(
@@ -422,4 +427,141 @@ test("click reports a selector missing from every session with the resolver's wo
     ["Runtime.evaluate", "Runtime.evaluate"],
     "the fast path misses, the shared resolver reports",
   );
+});
+
+/**
+ * Minimal page for the probe scripts: one element under every point, a
+ * listener registry, captured timers, and a MouseEvent that records itself.
+ */
+function probePage() {
+  const listeners = new Map();
+  const timers = [];
+  const target = {
+    dispatched: [],
+    contains(node) {
+      return node === target;
+    },
+    dispatchEvent(event) {
+      target.dispatched.push(event.type);
+      return true;
+    },
+  };
+  const context = vm.createContext({
+    window: {},
+    document: {
+      elementFromPoint: () => target,
+      addEventListener(type, handler) {
+        listeners.set(handler, type);
+      },
+      removeEventListener(type, handler) {
+        listeners.delete(handler);
+      },
+    },
+    setTimeout(callback, ms) {
+      timers.push({ callback, ms, cleared: false });
+      return timers.length;
+    },
+    clearTimeout(id) {
+      if (timers[id - 1]) timers[id - 1].cleared = true;
+    },
+    MouseEvent: class MouseEvent {
+      constructor(type, init) {
+        this.type = type;
+        Object.assign(this, init);
+      }
+    },
+  });
+  return {
+    target,
+    listeners,
+    timers,
+    run: (code) => vm.runInContext(code, context),
+    registry: () => context.window.__egoBrowserInputProbes ?? {},
+    trustedClick() {
+      for (const handler of [...listeners.keys()]) {
+        handler({ isTrusted: true, target });
+      }
+    },
+  };
+}
+
+async function captureProbeScripts({ inputTimesOut }) {
+  const { calls, restore } = clickOverride({
+    inputTimesOut,
+    probeResult: { seen: false, fallback: true },
+  });
+  try {
+    await withFakeEgo(() => click([30, 40]));
+  } finally {
+    restore();
+  }
+  const [install, , finish] = calls.map((call) => call.params.expression);
+  return { install, finish };
+}
+
+test("a successful click leaves no probe behind once its TTL elapses", async () => {
+  const { install } = await captureProbeScripts({ inputTimesOut: false });
+  const page = probePage();
+
+  assert.equal(page.run(install), true, "the probe found its target");
+  assert.equal(Object.keys(page.registry()).length, 1);
+  assert.equal(page.listeners.size, 1, "one capture listener is armed");
+  assert.deepEqual(
+    page.timers.map((timer) => timer.ms),
+    [5_000],
+    "the probe schedules its own removal",
+  );
+
+  page.trustedClick();
+  const [probe] = Object.values(page.registry());
+  assert.equal(probe.seen, true);
+  assert.equal(
+    page.listeners.size,
+    0,
+    "the listener is dropped on the first matching trusted click",
+  );
+  assert.equal(
+    Object.keys(page.registry()).length,
+    1,
+    "the entry stays readable for a dispatch that still times out",
+  );
+
+  page.timers[0].callback();
+  assert.deepEqual(
+    Object.keys(page.registry()),
+    [],
+    "the TTL removes the entry; nothing reads it after an acknowledged click",
+  );
+  assert.equal(page.listeners.size, 0);
+});
+
+test("the timeout path's read removes the probe whether or not the click landed", async () => {
+  const { install, finish } = await captureProbeScripts({
+    inputTimesOut: true,
+  });
+
+  const landed = probePage();
+  landed.run(install);
+  landed.trustedClick();
+  // Values cross the vm boundary with the sandbox's prototypes; spread them.
+  assert.deepEqual({ ...landed.run(finish) }, { seen: true, fallback: false });
+  assert.deepEqual(Object.keys(landed.registry()), []);
+  assert.equal(landed.timers[0].cleared, true, "the TTL timer is cancelled");
+  assert.deepEqual(
+    landed.target.dispatched,
+    [],
+    "a click that landed is not replayed",
+  );
+
+  const dropped = probePage();
+  dropped.run(install);
+  assert.deepEqual({ ...dropped.run(finish) }, { seen: false, fallback: true });
+  assert.deepEqual(Object.keys(dropped.registry()), []);
+  assert.equal(dropped.listeners.size, 0);
+  assert.deepEqual(dropped.target.dispatched, [
+    "mousemove",
+    "mousedown",
+    "mouseup",
+    "click",
+  ]);
 });
