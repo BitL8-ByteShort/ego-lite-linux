@@ -6059,7 +6059,8 @@ test("Page click retries when an iframe disappears during session discovery", as
 
     assert.deepEqual(await page.click("#ready", { timeout: 1_000 }), {});
     assert.equal(discoveries, 2);
-    assert.deepEqual(discoveryTimeouts, [1_000, 500]);
+    // The retry runs 50ms later on the remaining budget.
+    assert.deepEqual(discoveryTimeouts, [1_000, 950]);
   });
 });
 
@@ -6093,6 +6094,8 @@ test("Page click reports the action timeout instead of a tail discovery timeout"
       async ensureFrameSessions(_targetId, timeoutMs) {
         discoveryTimeouts.push(timeoutMs);
         if (timeoutMs < 250) {
+          // A discovery timeout consumes its whole budget before failing.
+          await fixture.services.sleep(timeoutMs);
           const error = new Error("CDP request timed out: Target.getTargets");
           error.code = "EGO_CDP_REQUEST_TIMEOUT";
           throw error;
@@ -6181,6 +6184,7 @@ test("Page click reports the last transient state after its timeout", async () =
       () => page.click("#changing", { timeout: 1_000 }),
       /page\.click timed out after 1000ms.*not visible/i,
     );
+    // The blocked target is re-examined every 50ms until the 1000ms deadline.
     assert.equal(
       fixture.calls.filter(
         ([kind, method, params]) =>
@@ -6188,7 +6192,7 @@ test("Page click reports the last transient state after its timeout", async () =
           method === "Runtime.callFunctionOn" &&
           params.functionDeclaration.includes("getBoundingClientRect"),
       ).length,
-      3,
+      21,
     );
     assert.equal(
       fixture.calls.some(
