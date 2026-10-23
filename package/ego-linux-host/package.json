@@ -1,0 +1,11 @@
+{
+  "name": "ego-linux-host",
+  "version": "0.1.0-dev.0",
+  "private": true,
+  "description": "Linux desktop host for the upstream ego-browser SDK; implementation scaffold",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

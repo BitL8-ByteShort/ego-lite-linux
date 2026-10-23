@@ -1,0 +1,3 @@
+# Local project defaults for the explicitly requested implementation model.
+model = "gpt-6.1-sol"
+model_reasoning_effort = "xhigh"

@@ -1,0 +1,33 @@
+{
+  "reviewed_at": "2026-10-23",
+  "upstream": "https://github.com/citrolabs/ego-lite.git",
+  "fork": "https://github.com/BitL8-ByteShort/ego-lite-linux.git",
+  "working_branch": "feat/linux-desktop",
+  "base": {
+    "branch": "dev",
+    "commit": "c024c32aa9fb2b4f7ff0524e38e8984bc982db53"
+  },
+  "main_at_review": "d392204d1ea1a8027a591ab2b0129c2e11d85f26",
+  "references": [
+    {
+      "pr": 291,
+      "url": "https://github.com/citrolabs/ego-lite/pull/291",
+      "repository": "nosliwhtes/ego-lite",
+      "commit": "7bb1545912bf7e7bdf4239a321d36af0e68cb65c",
+      "local_ref": "refs/remotes/upstream/pr-291",
+      "state": "open, unmerged"
+    },
+    {
+      "pr": 202,
+      "url": "https://github.com/citrolabs/ego-lite/pull/202",
+      "repository": "olenanikita1980-cell/ego-lite",
+      "commit": "27e951b1465b68337366d6a707dd5076b6c78bc9",
+      "local_ref": "refs/remotes/upstream/pr-202",
+      "state": "draft, unmerged"
+    }
+  ],
+  "executor": {
+    "model": "gpt-6.1-sol",
+    "model_reasoning_effort": "xhigh"
+  }
+}
