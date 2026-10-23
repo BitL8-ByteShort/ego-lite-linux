@@ -113,7 +113,7 @@ async function findRepositoryRoot(start) {
       (await isDirectory(join(directory, "plugins"))) &&
       (await isDirectory(join(directory, "skills")))
     ) {
-      return directory;
+      return realpath(directory);
     }
     const parent = dirname(directory);
     if (parent === directory) {
@@ -190,16 +190,19 @@ async function collectSkills(repositoryRoot, pluginRoot) {
   }
 
   const allowedLinks = new Map();
+  if ((await lstat(join(repositoryRoot, "skills"))).isSymbolicLink()) {
+    throw new Error("Canonical skills directory contains a symbolic link");
+  }
   for (const skill of skills) {
     const canonical = join(repositoryRoot, "skills", skill);
     if (!(await isDirectory(canonical))) {
       throw new Error(`Canonical Skill not found: skills/${skill}`);
     }
-    if ((await realpath(canonical)) !== canonical) {
-      throw new Error(`Canonical Skill ${skill} contains a symbolic link`);
-    }
     await validateLinks(canonical, `Canonical Skill ${skill}`);
-    allowedLinks.set(join(packagedSkillsRoot, skill), canonical);
+    allowedLinks.set(
+      join(packagedSkillsRoot, skill),
+      await realpath(canonical),
+    );
   }
   await validateLinks(
     pluginRoot,
@@ -210,6 +213,17 @@ async function collectSkills(repositoryRoot, pluginRoot) {
 }
 
 function run(command, args, options = {}) {
+  if (command === "npm") {
+    const npmCli =
+      process.env.npm_execpath ??
+      (process.platform === "win32"
+        ? join(dirname(process.execPath), "node_modules/npm/bin/npm-cli.js")
+        : undefined);
+    if (npmCli) {
+      command = process.execPath;
+      args = [npmCli, ...args];
+    }
+  }
   const result = spawnSync(command, args, {
     encoding: "utf8",
     ...options,
@@ -226,6 +240,7 @@ function run(command, args, options = {}) {
 
 function readmeSection(readme, heading) {
   const section = readme
+    .replace(/\r\n/g, "\n")
     .split(`${heading}\n`)[1]
     ?.split(/\n#{1,3} /)[0]
     ?.trim();

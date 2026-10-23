@@ -8,6 +8,7 @@ import {
   readFileSync,
   readlinkSync,
   readdirSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -68,6 +69,7 @@ function addPlugin(root, name, version, skillName) {
   symlinkSync(
     relative(join(pluginRoot, "skills"), join(root, "skills", skillName)),
     join(pluginRoot, "skills", skillName),
+    "dir",
   );
   write(
     join(pluginRoot, "README.md"),
@@ -125,11 +127,11 @@ function createFixture() {
   addPlugin(root, "sample", "2.4.0", "sample-skill");
   return root;
 }
-function runPackager(root, args) {
+function runPackager(root, args, env = process.env) {
   return spawnSync(
     process.execPath,
     [join(root, "plugins", "scripts", "package-plugins.mjs"), ...args],
-    { cwd: root, encoding: "utf8" },
+    { cwd: root, encoding: "utf8", env },
   );
 }
 function assertSuccess(result) {
@@ -166,7 +168,9 @@ function files(root, prefix = "") {
         false,
         `${path} must be materialized`,
       );
-      return info.isDirectory() ? files(root, path) : [path];
+      return info.isDirectory()
+        ? files(root, path)
+        : [path.replaceAll("\\", "/")];
     })
     .sort();
 }
@@ -383,6 +387,69 @@ test("one command builds nine independent host packages without changing source 
   }
 });
 
+test("CRLF plugin READMEs package complete host-specific installation guides", () => {
+  const root = createFixture();
+  const output = join(root, "release");
+  const readmePath = join(root, "plugins", "ego", "README.md");
+  const readme = readFileSync(readmePath, "utf8").replace(/\r?\n/g, "\r\n");
+  write(readmePath, readme);
+  try {
+    assertSuccess(runPackager(root, ["ego", "--output", output]));
+    assertArtifacts(root, output, "ego", "1.3.1", "ego-browser");
+    assert.equal(readFileSync(readmePath, "utf8"), readme);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("canonical Skill directory spelling follows the real filesystem", () => {
+  const root = createFixture();
+  const output = join(root, "release");
+  const original = join(root, "skills", "ego-browser");
+  const canonical = join(root, "skills", "EGO-BROWSER");
+  const pluginSkills = join(root, "plugins", "ego", "skills");
+  try {
+    const renamed = join(root, "skills", "renamed-skill");
+    renameSync(original, renamed);
+    renameSync(renamed, canonical);
+    const skillName = existsSync(original) ? "ego-browser" : "EGO-BROWSER";
+    rmSync(join(pluginSkills, "ego-browser"));
+    symlinkSync(
+      relative(pluginSkills, canonical),
+      join(pluginSkills, skillName),
+      "dir",
+    );
+    assertSuccess(runPackager(root, ["ego", "--output", output]));
+    assertArtifacts(root, output, "ego", "1.3.1", skillName);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("npm pack uses the configured Node CLI path with structured arguments", () => {
+  const root = createFixture();
+  const output = join(root, "release");
+  const npmCli = join(root, "npm CLI with spaces.mjs");
+  write(
+    npmCli,
+    'console.error("npm-cli-probe", JSON.stringify(process.argv.slice(2))); process.exitCode = 42;\n',
+  );
+  try {
+    const result = runPackager(root, ["ego", "--output", output], {
+      ...process.env,
+      npm_execpath: npmCli,
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(
+      result.stderr,
+      /npm-cli-probe \["pack","--json","--ignore-scripts","--pack-destination",/,
+    );
+    assert.equal(existsSync(join(output, "ego-v1.3.1")), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("--all creates nine artifacts per plugin in separate version directories", () => {
   const root = createFixture();
   const output = join(root, "release");
@@ -443,6 +510,8 @@ for (const kind of [
   "missing-skill",
   "different-skill",
   "canonical-child",
+  "canonical-root",
+  "canonical-skill",
   "output-link",
 ]) {
   test(`${kind} symlinks fail packaging without changing the source`, () => {
@@ -461,12 +530,29 @@ for (const kind of [
           join(root, "outside", "secret.txt"),
           join(root, "skills", "ego-browser", "secret.txt"),
         );
-      if (kind === "output-link") symlinkSync(join(root, "outside"), output);
+      if (kind === "canonical-root") {
+        renameSync(join(root, "skills"), join(root, "real-skills"));
+        symlinkSync(join(root, "real-skills"), join(root, "skills"), "dir");
+      }
+      if (kind === "canonical-skill") {
+        renameSync(
+          join(root, "skills", "ego-browser"),
+          join(root, "real-skill"),
+        );
+        symlinkSync(
+          join(root, "real-skill"),
+          join(root, "skills", "ego-browser"),
+          "dir",
+        );
+      }
+      if (kind === "output-link")
+        symlinkSync(join(root, "outside"), output, "dir");
       if (kind === "missing-skill" || kind === "different-skill") {
         rmSync(skillLink);
         symlinkSync(
           join(root, kind === "missing-skill" ? "missing" : "outside"),
           skillLink,
+          "dir",
         );
       }
       const before = readlinkSync(skillLink);
@@ -501,10 +587,24 @@ test("invalid selectors fail with clear errors", () => {
 test("the documented npm command builds all nine artifacts with working isolated adapters", () => {
   const output = mkdtempSync(join(tmpdir(), "ego-plugin-npm-"));
   try {
+    const npmCli =
+      process.env.npm_execpath ??
+      (process.platform === "win32"
+        ? join(dirname(process.execPath), "node_modules/npm/bin/npm-cli.js")
+        : undefined);
+    const args = [
+      "--prefix",
+      "plugins/ego",
+      "run",
+      "package",
+      "--",
+      "--output",
+      output,
+    ];
     assertSuccess(
       spawnSync(
-        "npm",
-        ["--prefix", "plugins/ego", "run", "package", "--", "--output", output],
+        npmCli ? process.execPath : "npm",
+        npmCli ? [npmCli, ...args] : args,
         { cwd: repositoryRoot, encoding: "utf8" },
       ),
     );

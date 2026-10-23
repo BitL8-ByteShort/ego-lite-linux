@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const repoFile = (path) => new URL(`../../../${path}`, import.meta.url);
@@ -232,9 +233,9 @@ test("OpenCode adapter injects only instructions and the Skill slash command", a
 
   assert.equal(config.mcp, undefined);
   assert.equal(config.instructions.length, 1);
-  assert.match(
+  assert.equal(
     config.instructions[0],
-    /plugins\/ego\/skills\/ego-browser\/SKILL\.md$/,
+    fileURLToPath(repoFile(`${pluginRoot}/skills/ego-browser/SKILL.md`)),
   );
   assert.match(config.command["ego-browser"].template, /\$ARGUMENTS/);
   assertPureSkillText(adapterSource, "OpenCode adapter");
