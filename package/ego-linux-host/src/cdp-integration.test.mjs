@@ -304,3 +304,40 @@ test("scoped child attach preserves the SDK debugger wait so network tracking st
     { exclude: true },
   ]);
 });
+test("renderer focus setup cannot turn successful target attachment into a transport failure", async () => {
+  const calls = [];
+  const chrome = {
+    generation: "g",
+    bridge: {
+      call: async (method, params) => {
+        calls.push(method);
+        if (method === "Target.createTarget") return { targetId: "page" };
+        if (method === "Target.getTargets")
+          return { targetInfos: [{ targetId: "page", type: "page" }] };
+        if (method === "Target.attachToTarget") return { sessionId: "session" };
+        if (method === "Emulation.setFocusEmulationEnabled")
+          throw Object.assign(Error("renderer awaiting navigation"), {
+            code: -32000,
+          });
+        return {};
+      },
+    },
+  };
+  const host = new LinuxHost(chrome, "default", []),
+    client = host.add("c", "A", () => {}),
+    task = await host.dispatch(client, "createTaskSpace", ["t"]),
+    lease = host.acquire(client, task.id);
+  await host.dispatch(client, "listTabs", [], lease);
+  const attached = await host.dispatch(
+    client,
+    "cdp",
+    [
+      {
+        method: "Target.attachToTarget",
+        params: { targetId: "page", flatten: true },
+      },
+    ],
+    lease,
+  );
+  assert.equal(attached.sessionId, "session");
+});

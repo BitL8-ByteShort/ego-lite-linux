@@ -601,27 +601,18 @@ export class LinuxHost {
           epoch: l.epoch,
         });
         if (this.infos.get(targetId)?.type === "page") {
-          try {
-            // A popup can hide its opener and stall native input/rAF. DevTools
-            // focus emulation keeps this task Page active without selecting a
-            // tab/window or moving physical focus. Session detach removes it.
-            await call(
+          // Focus emulation is renderer-bound. A held navigation must not hold
+          // the browser-level attach response; the SDK classifies renderer
+          // responsiveness after it has the session needed to stop navigation.
+          await this.chrome.bridge
+            .call(
               "Emulation.setFocusEmulationEnabled",
               { enabled: true },
               r.sessionId,
-            );
-          } catch (error) {
-            this.sessions.delete(r.sessionId);
-            await this.chrome.bridge
-              .call(
-                "Target.detachFromTarget",
-                { sessionId: r.sessionId },
-                undefined,
-                800,
-              )
-              .catch(() => {});
-            throw error;
-          }
+              500,
+            )
+            .catch(() => {});
+          this.check(c, l);
         }
       }
       return r;
