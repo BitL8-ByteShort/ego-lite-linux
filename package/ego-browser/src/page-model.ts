@@ -486,6 +486,7 @@ type RuntimeTab = {
 };
 
 type PageModelServices = {
+  supportsSnapshotRootFrameId?: boolean;
   ledger: LedgerPort;
   pageRefs: PageRefRegistry;
   gate: OperationGate;
@@ -507,7 +508,7 @@ type PageModelServices = {
     content: PageClipboardContent,
     action: () => Promise<T>,
   ): Promise<T>;
-  snapshot(options?: SnapshotOptions): Promise<any>;
+  snapshot(options?: SnapshotOptions & { rootFrameId?: string }): Promise<any>;
   screenshot(
     path: string | undefined,
     options: CaptureScreenshotOptions,
@@ -871,6 +872,9 @@ const defaultGate: OperationGate = {
 };
 
 const baseDefaultServices: Omit<PageModelServices, "ledger" | "pageBudget"> = {
+  get supportsSnapshotRootFrameId() {
+    return globalThis.ego?.supportsSnapshotRootFrameId === true;
+  },
   gate: defaultGate,
   pageRefs: defaultPageRefs,
   async createTab(url) {
@@ -1917,9 +1921,27 @@ class Page {
       const { root: _root, ...snapshotOptions } = options;
       const snapshotScope = options.scope ?? "only_within_viewport";
       const beforeDocuments = await this.#pageDocuments(page, sessionId);
+      // Native backends may reuse a backendNodeId in another renderer. Keep
+      // this internal provenance at the binding boundary; the public root is
+      // still a Page ref and native calls without it remain ambiguity-checked.
+      let rootFrameId: string | undefined;
+      if (root !== undefined && this.#services.supportsSnapshotRootFrameId) {
+        rootFrameId = rootContext?.frameId;
+        const mainDocument = beforeDocuments.get("");
+        if (
+          !rootFrameId &&
+          rootContext?.frameProvenance === "page" &&
+          mainDocument
+        ) {
+          const document = JSON.parse(mainDocument);
+          if (Array.isArray(document) && typeof document[0] === "string")
+            rootFrameId = document[0];
+        }
+      }
       const result = await this.#services.snapshot({
         ...snapshotOptions,
         ...(root === undefined ? {} : { root }),
+        ...(rootFrameId === undefined ? {} : { rootFrameId }),
         scope: snapshotScope,
         includeActionMarks: options.includeActionMarks ?? true,
         includeStableLocator: options.includeStableLocator ?? true,

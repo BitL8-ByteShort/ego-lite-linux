@@ -14,6 +14,29 @@ ego-browser Skill directory and follow its link for your operating system.
 
 Pass the script to `ego-browser nodejs`.
 
+<!-- platform: linux -->
+
+Before the first Linux round, create and record a non-secret workflow identity:
+
+```bash
+export EGO_LINUX_AGENT_ID="$(node -e 'console.log(require("node:crypto").randomUUID())')"
+printf '%s\n' "$EGO_LINUX_AGENT_ID"
+```
+
+Retain it for the whole goal. Export the same literal value in every new shell.
+Never regenerate it to recover from ownership errors; concurrent agents need
+different identities.
+
+Sign-ins and storage persist across restarts and are shared by tasks in the
+selected named profile. Task tabs separate command ownership; use separate
+profiles in Spaces for separate accounts.
+
+Take control and Pause all are hard human stops. Only the human's Resume agent
+clears one. Never bypass it with takeover, a new identity or a new space.
+Delegated `handOff()` follows the normal confirmed resumption workflow.
+
+<!-- /platform -->
+
 <!-- platform: windows -->
 
 The form depends on the shell that runs the command: heredoc is Bash/Zsh
@@ -104,11 +127,22 @@ Node.js APIs belong in the script; Page globals such as `window`, `document`,
 `page.evaluate()`. Do not import Playwright or launch another browser.
 
 The Node.js runtime uses ESM. When a script needs local files, load built-ins
-with dynamic imports such as `await import("node:fs/promises")`. The script
-does not run in your shell's working directory, so use absolute paths for every
-file it reads or writes. It also does not inherit your shell's environment
-variables: `process.env` will not contain values you set before running
-`ego-browser`, so write every input directly into the script.
+with dynamic imports such as `await import("node:fs/promises")`. Use absolute
+paths for every file it reads or writes.
+
+<!-- platform: macos, windows -->
+
+The native app runs scripts outside your shell's working directory and does
+not inherit its environment variables. `process.env` will not contain values
+you set before running `ego-browser`; write every input directly into the script.
+
+<!-- /platform -->
+
+<!-- platform: linux -->
+
+The Linux CLI inherits its shell environment, including `EGO_LINUX_AGENT_ID`.
+
+<!-- /platform -->
 
 Ego-browser deliberately exposes a small custom API. It is not Playwright, even
 where method names and options look similar. Use only the TaskSpace, Page,
@@ -239,15 +273,11 @@ Work efficiently:
 Prefer snapshots and semantic selectors for ordinary DOM pages. Use screenshots
 and coordinates only when useful DOM semantics are unavailable.
 
-Before choosing an unfamiliar target, take a snapshot. When the current state
-is sufficient to plan several actions on the same Page, complete them in one
-script invocation, then observe the result once. Observe between actions only when an
-intermediate result changes what should happen next. Keep the action sequence,
-the wait for its final expected state, and the next snapshot in the same
-script invocation. Print the snapshot last so the next round can act on it directly.
-The final snapshot is the next round's starting view of the changed page;
-without it, that round usually has to spend a separate browser call observing
-before it can choose the next target, which wastes compute.
+Before choosing an unfamiliar target, take a snapshot. Batch actions on the same
+Page in one invocation when the current state supports them. Observe between
+actions only when an intermediate result changes the next step. Keep actions,
+the final expected-state wait, and the next snapshot in the same invocation.
+Print that snapshot last so the next round can act directly on the updated page.
 
 Wait for the expected result: use `waitForURL()` for navigation,
 `waitForSelector()` for element state, or `waitForFunction()` for application
@@ -374,8 +404,16 @@ click over the intended scrollable area before using it.
 
 On macOS and Windows, `keyboard.paste()` sends the native paste shortcut and
 then restores the user's clipboard. Pass `{ text, html }` when a rich editor
-needs structured clipboard content; `text` is the plain-text fallback. On other
-platforms, use `keyboard.insertText()` for plain text.
+needs structured clipboard content; `text` is the plain-text fallback.
+
+<!-- platform: linux -->
+
+Linux X11 paste needs Python 3/libX11/libXfixes. Transactions serialize across processes
+and restore only while still owning the clipboard. Unsafe formats and native
+Wayland fail before mutation; use `keyboard.insertText()` for plain text.
+Restored X11 data needs an owner process until replaced.
+
+<!-- /platform -->
 
 ```js
 await page.keyboard.paste({
@@ -434,10 +472,20 @@ the destination matters.
 For uncommon protocol-event workflows, `await page.events()` returns and clears
 the buffered event array; it is not an EventEmitter.
 
+<!-- platform: macos, windows -->
+
 Page sessions hide page console messages from CDP so sites cannot detect the
 automation. To read `Runtime.consoleAPICalled` while debugging, first call
 `await page.cdp("egoAutomated.disable")`, then `page.cdp("Runtime.enable")`.
 Sites can detect CDP again while it is off.
+
+<!-- /platform -->
+
+<!-- platform: linux -->
+
+Linux filters console events; stock Chromium still exposes serialization side effects.
+
+<!-- /platform -->
 
 A synchronous JavaScript dialog may appear as `receipt.dialog` or in
 `page.info()`. Handle it before continuing:

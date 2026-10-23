@@ -2,10 +2,29 @@
   "name": "ego-linux-host",
   "version": "0.1.0-dev.0",
   "private": true,
-  "description": "Linux desktop host for the upstream ego-browser SDK; implementation scaffold",
   "type": "module",
+  "license": "MIT",
   "engines": {
     "node": ">=22"
   },
-  "license": "MIT"
+  "description": "Community Linux Chromium host for the upstream ego-browser SDK",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "npm run build && node --test src/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "style:check": "prettier --check 'src/**/*.{ts,mjs}' 'scripts/*.mjs' 'bin/*.mjs'",
+    "test:browser": "node scripts/browser-e2e.mjs",
+    "test:persistence": "node scripts/browser-e2e.mjs persistence",
+    "test:concurrency": "node scripts/browser-e2e.mjs concurrency",
+    "test:install": "node scripts/install-e2e.mjs",
+    "package": "node scripts/package.mjs",
+    "test:control": "node scripts/control-e2e.mjs",
+    "test:lifecycle": "node scripts/lifecycle-e2e.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.8.3",
+    "prettier": "^3.8.4"
+  }
 }

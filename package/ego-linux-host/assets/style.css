@@ -1,0 +1,96 @@
+:root {
+  font: 16px system-ui;
+  color: #e7edf2;
+  background: #11191e;
+  color-scheme: dark;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 1020px;
+  padding: 40px 24px;
+  margin: auto;
+}
+header {
+  max-width: 780px;
+  margin-bottom: 32px;
+}
+.badge {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: #94c9c3;
+}
+h1 {
+  font-size: 44px;
+  margin: 12px 0;
+}
+p {
+  color: #aabac4;
+  line-height: 1.6;
+}
+section {
+  padding: 24px;
+  border: 1px solid #31414c;
+  border-radius: 12px;
+  margin: 20px 0;
+  background: #172329;
+}
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.actions h2 {
+  margin-right: auto;
+}
+button,
+input,
+select {
+  font: inherit;
+  border: 1px solid #49606b;
+  border-radius: 6px;
+  padding: 10px 14px;
+  background: #22333b;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+button:hover {
+  background: #36525d;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid #8edad1;
+  outline-offset: 3px;
+}
+form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.task {
+  border-top: 1px solid #354851;
+  margin-top: 20px;
+  padding: 18px 0;
+}
+.task h3 {
+  margin: 0 0 8px;
+}
+.task p {
+  margin: 8px 0;
+}
+#feedback {
+  position: sticky;
+  bottom: 10px;
+  background: #20343d;
+  padding: 12px;
+  border-radius: 8px;
+  min-height: 1.4em;
+}
+input {
+  min-width: 180px;
+}

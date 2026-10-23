@@ -1,0 +1,152 @@
+name: Linux community host
+
+on:
+  pull_request:
+  push:
+    branches: [dev, main, feat/linux-desktop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    name: Linux / Node ${{ matrix.node }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, "lts/*"]
+    env:
+      CI: "true"
+      EGO_LINUX_CHROME_PATH: /usr/bin/google-chrome
+      EGO_LINUX_HEADLESS: "1"
+      EGO_LINUX_AGENT_ID: ci-linux-qualification
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: |
+            package/ego-browser/package-lock.json
+            package/ego-linux-host/package-lock.json
+      - name: Install display and clipboard fixtures
+        run: sudo apt-get update && sudo apt-get install -y xvfb xclip python3 libx11-6 libxfixes3 util-linux
+      - name: Check unprivileged browser prerequisite
+        run: |
+          test "$(id -u)" -ne 0
+          "$EGO_LINUX_CHROME_PATH" --version
+          node --version
+          mkdir -m 700 "$RUNNER_TEMP/ego-runtime"
+          echo "XDG_RUNTIME_DIR=$RUNNER_TEMP/ego-runtime" >> "$GITHUB_ENV"
+          echo "XDG_DATA_HOME=$RUNNER_TEMP/ego-data" >> "$GITHUB_ENV"
+          echo "XDG_CONFIG_HOME=$RUNNER_TEMP/ego-config" >> "$GITHUB_ENV"
+      - name: SDK portable checks
+        run: |
+          node --test scripts/check-branch-freshness.test.mjs
+          npm ci --prefix package/ego-browser
+          npm run style:check --prefix package/ego-browser
+          npm audit --prefix package/ego-browser --registry=https://registry.npmjs.org --audit-level=moderate
+          npm test --prefix package/ego-browser
+          npm run validate:site-skills --prefix package/ego-browser
+      - name: Native X11 clipboard and installer wrapper (Xvfb)
+        working-directory: package/ego-browser
+        run: xvfb-run -a node --test src/linux-clipboard.test.mjs src/linux-installer.test.mjs
+      - name: Host and plugin checks
+        run: |
+          npm ci --prefix package/ego-linux-host
+          npm test --prefix package/ego-linux-host
+          npm run typecheck --prefix package/ego-linux-host
+          npm run style:check --prefix package/ego-linux-host
+          npm test --prefix plugins/ego
+          npm run package --prefix plugins/ego
+      - name: Sandboxed headless browser qualification
+        run: |
+          npm run test:browser --prefix package/ego-linux-host
+          npm run test:persistence --prefix package/ego-linux-host
+          npm run test:concurrency --prefix package/ego-linux-host
+          npm run test:lifecycle --prefix package/ego-linux-host
+      - name: Package and qualify installed artifact
+        run: |
+          node package/ego-linux-host/scripts/package.mjs
+          npm run test:install --prefix package/ego-linux-host
+      - name: Synthetic headed browser qualification (Xvfb)
+        run: |
+          xvfb-run -a env EGO_LINUX_HEADLESS=0 npm run test:browser --prefix package/ego-linux-host
+          xvfb-run -a env EGO_LINUX_HEADLESS=0 npm run test:control --prefix package/ego-linux-host
+      - name: Install launcher for the full upstream suite
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs/promises';
+          import path from 'node:path';
+          import {install} from './package/ego-linux-host/scripts/install.mjs';
+          const {version}=JSON.parse(await fs.readFile('package/ego-linux-host/package.json','utf8'));
+          const prefix=path.join(process.env.RUNNER_TEMP,'installed host with spaces');
+          const artifact=path.resolve('artifacts/linux',`ego-lite-linux-${version}-linux-${process.arch}.tar.gz`);
+          await install({artifact,prefix});
+          await fs.appendFile(process.env.GITHUB_ENV,`EGO_BROWSER_REAL_E2E_CLI=${path.join(prefix,'bin/ego-browser')}\n`);
+          JS
+      - name: Full SDK browser E2E through installed launcher (Xvfb)
+        env:
+          EGO_BROWSER_REAL_E2E_ONLY: ""
+          EGO_LINUX_AGENT_ID: ci-upstream-full-suite
+        run: xvfb-run -a env EGO_LINUX_HEADLESS=0 npm run e2e --prefix package/ego-browser
+      - name: Stop owned qualification browser
+        if: always()
+        run: |
+          if [ -x "$RUNNER_TEMP/installed host with spaces/bin/ego-browser" ]; then
+            "$RUNNER_TEMP/installed host with spaces/bin/ego-browser" stop
+          fi
+      - name: Save sanitized qualification receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-receipts-node-${{ strategy.job-index }}
+          path: artifacts/linux/*receipt*.json
+          if-no-files-found: warn
+      - name: Save qualified payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-qualified-payload-node-${{ strategy.job-index }}
+          path: |
+            artifacts/linux/*.tar.gz
+            artifacts/linux/*.sha256
+            artifacts/linux/*.manifest.json
+          if-no-files-found: error
+
+  portable-native-regressions:
+    name: Portable SDK / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package/ego-browser/package-lock.json
+      - run: npm ci --prefix package/ego-browser
+      - run: npm test --prefix package/ego-browser
+      - run: npm test --prefix plugins/ego
+
+  artifacts:
+    name: Qualified Linux artifact gate
+    needs: [qualify, portable-native-regressions]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-qualified-payload-node-0
+          path: qualified-linux
+      - name: Verify archive checksums
+        working-directory: qualified-linux
+        run: sha256sum --check *.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ego-lite-community-linux
+          path: qualified-linux/*

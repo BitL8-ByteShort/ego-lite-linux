@@ -98,7 +98,9 @@ export async function renameWithRetry(
 
 /** Stable across Agent rounds and Node-service restarts in one Ego Lite run. */
 export function runtimeInstanceId(parentPid = process.ppid): string {
-  return `browser-host:${parentPid}`;
+  return (
+    process.env.EGO_BROWSER_RUNTIME_INSTANCE_ID || `browser-host:${parentPid}`
+  );
 }
 
 type AddPageOptions = {

@@ -153,3 +153,6 @@ Tutorials, the full tool reference, and integration guides live at [lite.ego.app
 ## License
 
 The contents of this repository are released under the [MIT License](LICENSE). The ego lite browser is a separate, free download.
+## Community Linux host
+
+This fork adds a persistent stock-Chromium Linux host and Spaces controller while retaining the full upstream SDK and agent ecosystem. Start with [Linux installation](docs/linux/installation.md), [host usage](package/ego-linux-host/README.md), and the exact [qualification ledger](docs/linux/VERIFICATION.md). This community build does not include the proprietary native browser.

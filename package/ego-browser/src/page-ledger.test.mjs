@@ -25,6 +25,23 @@ test("runtimeInstanceId is a pure browser-host identifier", () => {
   assert.equal(first, "browser-host:42");
 });
 
+test("an explicit host runtime identity survives changing CLI parent processes", () => {
+  const previous = process.env.EGO_BROWSER_RUNTIME_INSTANCE_ID;
+  try {
+    process.env.EGO_BROWSER_RUNTIME_INSTANCE_ID =
+      "linux:profile-a:generation-a";
+    assert.equal(runtimeInstanceId(42), "linux:profile-a:generation-a");
+    assert.equal(runtimeInstanceId(77), "linux:profile-a:generation-a");
+    process.env.EGO_BROWSER_RUNTIME_INSTANCE_ID =
+      "linux:profile-a:generation-b";
+    assert.equal(runtimeInstanceId(42), "linux:profile-a:generation-b");
+  } finally {
+    if (previous === undefined)
+      delete process.env.EGO_BROWSER_RUNTIME_INSTANCE_ID;
+    else process.env.EGO_BROWSER_RUNTIME_INSTANCE_ID = previous;
+  }
+});
+
 async function withTempLedger(fn) {
   const rootDir = await mkdtemp(join(tmpdir(), "ego-page-ledger-test-"));
   try {

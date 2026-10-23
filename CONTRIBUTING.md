@@ -196,7 +196,7 @@ you verified it. Call out public API or Skill changes, and add an appropriate
 release-note label such as `fix`, `feat`, `docs`, or `ci`.
 
 The pre-commit hooks select checks based on the staged files. Their freshness
-check currently compares against `origin/dev`. For a beta-targeted PR, verify
+check currently compares against `upstream/dev` when that remote exists, otherwise `origin/dev`. For a beta-targeted PR, verify
 that the latest `origin/2.0.0-beta-dev` is an ancestor of your branch; if the dev
 check is inapplicable, exclude only `branch-up-to-date` with
 `LEFTHOOK_EXCLUDE=branch-up-to-date` for that commit. Keep the other checks enabled.

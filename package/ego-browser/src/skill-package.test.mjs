@@ -28,6 +28,7 @@ test("the bundled usage guide is the unwrapped source guide between version and 
   const lines = bundled.trimEnd().split("\n");
 
   assert.deepEqual((await readdir(join(outDir, "ego-browser"))).sort(), [
+    "SKILL.linux.md",
     "SKILL.macos.md",
     "SKILL.md",
     "SKILL.windows.md",
@@ -118,6 +119,7 @@ test("renderGuide selects platform blocks and strips the markers", () => {
     body("windows"),
     "Shared start. Windows only, same paragraph.\n\nBoth.",
   );
+  assert.equal(body("linux"), "Shared start.");
   assert.equal(body("macos"), "Shared start.\n\n## macOS heading\n\nBoth.");
   assert.equal(
     body(null),
@@ -132,7 +134,7 @@ test("renderGuide selects platform blocks and strips the markers", () => {
     /^\[ego-browser:skill\] ego-browser usage guide v9\.9\.9\n/,
   );
   assert.throws(
-    () => renderGuide(source, { platform: "linux" }),
+    () => renderGuide(source, { platform: "freebsd" }),
     /unknown guide platform/,
   );
 });
@@ -156,8 +158,8 @@ test("selectPlatform rejects malformed platform blocks", () => {
   );
   assert.throws(
     () =>
-      selectPlatform("<!-- platform: linux -->\n<!-- /platform -->", "macos"),
-    /unknown platform "linux"/,
+      selectPlatform("<!-- platform: freebsd -->\n<!-- /platform -->", "macos"),
+    /unknown platform "freebsd"/,
   );
 });
 
@@ -173,6 +175,7 @@ test("the bundled entry Skill matches the published entry Skill", async () => {
   ]);
   assert.deepEqual((await readdir(join(entry, "references"))).sort(), [
     "clearing-state.md",
+    "install-linux.md",
     "install-macos.md",
     "install-windows.md",
     "install.md",
@@ -198,6 +201,7 @@ test("the entry Skill defers usage to ego-browser skill", async () => {
   assert.match(entry, /references\/install\.md/);
   assert.match(entry, /references\/install-macos\.md/);
   assert.match(entry, /references\/install-windows\.md/);
+  assert.match(entry, /references\/install-linux\.md/);
   assert.match(entry, /references\/clearing-state\.md/);
 });
 
@@ -206,6 +210,7 @@ test("the shared install guide routes to a file per operating system", async () 
   const shared = await readFile(join(references, "install.md"), "utf8");
   assert.match(shared, /\(install-macos\.md\)/);
   assert.match(shared, /\(install-windows\.md\)/);
+  assert.match(shared, /\(install-linux\.md\)/);
   assert.doesNotMatch(shared, /PowerShell|install\.sh|SmartScreen|Gatekeeper/);
   const macos = await readFile(join(references, "install-macos.md"), "utf8");
   assert.match(macos, /scripts\/install\.sh/);

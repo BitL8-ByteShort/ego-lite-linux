@@ -2548,7 +2548,9 @@ test("subtree snapshots preserve saved sibling roots when native refs are reused
 
 test("a subtree snapshot inherits the root ref frame provenance", async () => {
   await withFixture(async (fixture) => {
+    const nativeRoots = [];
     const task = taskForRound(fixture, "round-a", {
+      supportsSnapshotRootFrameId: true,
       async ensureFrameSessions() {
         return new Map([["frame-child", "session:target-1"]]);
       },
@@ -2572,6 +2574,10 @@ test("a subtree snapshot inherits the root ref frame provenance", async () => {
             ],
           };
         }
+        nativeRoots.push({
+          root: options.root,
+          rootFrameId: options.rootFrameId,
+        });
         return {
           content: [
             'button "Frame root" [ref=21]',
@@ -2598,6 +2604,7 @@ test("a subtree snapshot inherits the root ref frame provenance", async () => {
     await page.snapshot({ scope: "full_page" });
 
     await page.snapshot({ scope: "subtree", root: "@21" });
+    assert.deepEqual(nativeRoots, [{ root: 21, rootFrameId: "frame-child" }]);
 
     assert.deepEqual(
       fixture.services.pageRefs.forTarget(page.targetId).get("22"),
@@ -7052,4 +7059,30 @@ test("snapshot describes a Page that stops answering after the first document ch
     );
     assert.equal(calls, 2, "the second frame discovery is the one that failed");
   });
+});
+
+test("native frame-root capability opts in without changing legacy snapshot parameter shapes", async () => {
+  for (const supported of [false, true]) {
+    await withFixture(async (fixture) => {
+      const task = taskForRound(fixture, "frame-root", {
+        supportsSnapshotRootFrameId: supported,
+      });
+      const page = await openTestPage(task, "https://example.test/frame-root");
+      await page.snapshot();
+      await page.snapshot({ scope: "subtree", root: "@21" });
+      assert.equal(
+        fixture.snapshotOptions.at(-1).rootFrameId,
+        supported ? "frame-1" : undefined,
+      );
+      await assert.rejects(
+        () =>
+          page.snapshot({
+            scope: "subtree",
+            root: "@21",
+            rootFrameId: "frame-1",
+          }),
+        /unknown option: rootFrameId/,
+      );
+    });
+  }
 });

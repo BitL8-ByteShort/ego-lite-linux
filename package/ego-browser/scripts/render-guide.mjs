@@ -12,7 +12,7 @@
 // output. Prettier keeps a blank line on each side of a marker, so a block
 // holds whole paragraphs, headings, or code fences, never part of a paragraph.
 
-export const guidePlatforms = ["macos", "windows"];
+export const guidePlatforms = ["macos", "windows", "linux"];
 
 // Claude Code keeps 30,000 characters of command output; leave headroom.
 export const maxGuideLength = 25_000;

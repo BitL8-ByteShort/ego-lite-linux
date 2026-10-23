@@ -29,8 +29,9 @@ in parts, for example `ego-browser skill > "$TMPDIR/ego-browser-skill.md"`, or
 - [Install or upgrade ego lite](references/install.md) — read when
   `ego-browser` is not found, or `skill` is an unknown command. It links to
   the steps for your operating system:
-  [macOS](references/install-macos.md) or
-  [Windows](references/install-windows.md).
+  [macOS](references/install-macos.md),
+  [Windows](references/install-windows.md), or
+  [Linux community build](references/install-linux.md).
 - [Clearing cookies, cache, and storage](references/clearing-state.md) — read
   before clearing any cookie, cache, or storage; some clears reach the whole
   browser profile.

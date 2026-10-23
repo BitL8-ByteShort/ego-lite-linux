@@ -6,6 +6,10 @@ The ego-browser skill depends on the ego lite browser: the `ego-browser` command
 
 ego lite website: https://lite.ego.app/
 
+Linux uses the community host and its user-level artifact installer. Read
+[install-linux.md](install-linux.md) for installation and updates instead of the
+native app upgrade/onboarding steps below.
+
 ## Upgrade an older ego lite
 
 If `ego-browser` exists but `ego-browser skill` reports `Unknown command: skill`, the installed ego lite is older than this skill. Ask the user for approval, then run:
@@ -22,11 +26,12 @@ The install steps, the commands that confirm the installation, and the troublesh
 
 - macOS: [install-macos.md](install-macos.md)
 - Windows: [install-windows.md](install-windows.md)
+- Linux community build: [install-linux.md](install-linux.md)
 - Other platforms: there is no installer. Have the user check https://lite.ego.app/ for a build; if none exists, ego-browser is not available on this machine.
 
 ## Onboarding
 
-Onboarding is a step the user completes in the GUI, on every platform:
+On macOS and Windows, onboarding is a step the user completes in the GUI:
 
 - Choose to import data from Chrome or another browser as needed.
 - Onboarding registers the `ego-browser` command on the PATH.

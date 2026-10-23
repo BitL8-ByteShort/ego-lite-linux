@@ -5,6 +5,7 @@ import {
 } from "node:child_process";
 import { win32 } from "node:path";
 import type { Writable } from "node:stream";
+import { LINUX_CLIPBOARD_HOST } from "./linux-clipboard-host.js";
 
 export type ClipboardTransactionStatus = "restored" | "changed";
 
@@ -26,6 +27,7 @@ type ClipboardTransactionOptions = {
 type ClipboardHostMessage = {
   state: "ready" | "restored" | "changed" | "error";
   message?: string;
+  code?: string;
 };
 
 export class ClipboardRestoreError extends Error {
@@ -117,9 +119,10 @@ function beginNativeClipboardTransaction(
 ): Promise<ClipboardTransaction> {
   if (platform === "darwin") return beginDarwinClipboardTransaction(input);
   if (platform === "win32") return beginWin32ClipboardTransaction(input);
+  if (platform === "linux") return beginLinuxClipboardTransaction(input);
   return Promise.reject(
     new Error(
-      "page.keyboard.paste requires macOS or Windows clipboard support; use page.keyboard.insertText() for plain text",
+      "page.keyboard.paste requires macOS, Windows, or Linux clipboard support; use page.keyboard.insertText() for plain text",
     ),
   );
 }
@@ -207,6 +210,59 @@ function beginWin32ClipboardTransaction(
   });
 }
 
+type LinuxClipboardOptions = {
+  env?: NodeJS.ProcessEnv;
+  spawnHost?: SpawnClipboardHost;
+};
+
+async function beginLinuxClipboardTransaction(
+  input: ClipboardInput,
+  { env = process.env, spawnHost = spawn }: LinuxClipboardOptions = {},
+): Promise<ClipboardTransaction> {
+  if (env.WAYLAND_DISPLAY || env.XDG_SESSION_TYPE === "wayland") {
+    throw Object.assign(
+      new Error(
+        "Native Wayland clipboard formats cannot be restored safely by this backend. Use page.keyboard.insertText() for plain text, or run an X11 session for native text/HTML paste.",
+      ),
+      { code: "EGO_CLIPBOARD_UNSAFE_BACKEND" },
+    );
+  }
+  if (!env.DISPLAY) {
+    throw Object.assign(
+      new Error(
+        "Linux clipboard paste needs an X11 DISPLAY in the browser's desktop session. Use page.keyboard.insertText() for plain text.",
+      ),
+      { code: "EGO_CLIPBOARD_UNAVAILABLE" },
+    );
+  }
+  const child = spawnHost("python3", ["-u", "-c", LINUX_CLIPBOARD_HOST], {
+    env,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  try {
+    return await startClipboardHost(child, {
+      platformName: "Linux X11",
+      sendContent(stdin) {
+        stdin.write(`${JSON.stringify(input)}\n`, "utf8");
+      },
+      signalRestore() {
+        child.stdin?.end("restore\n");
+      },
+    });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw Object.assign(
+        new Error(
+          "Linux clipboard paste requires Python 3, libX11 and libXfixes (Debian/Ubuntu: python3 libx11-6 libxfixes3). Use page.keyboard.insertText() for plain text.",
+          { cause: error },
+        ),
+        { code: "EGO_CLIPBOARD_UNAVAILABLE" },
+      );
+    }
+    throw error;
+  }
+}
+
 function windowsPowerShellPath(): string {
   return win32.join(
     process.env.SystemRoot ?? "C:\\Windows",
@@ -270,6 +326,9 @@ async function startClipboardHost(
     child.once("error", reject);
     child.once("exit", (code, signal) => resolve({ code, signal }));
   });
+  // Spawn failure can precede stdout close. Observe rejection immediately;
+  // nextHostMessage still reports the same error after its stream closes.
+  exit.catch(() => {});
   // A host that exits early reports through its exit status; the broken pipe
   // must not surface as an unhandled stream error.
   stdin.on("error", () => {});
@@ -277,8 +336,11 @@ async function startClipboardHost(
   host.sendContent(stdin);
   const first = await nextHostMessage(messages, exit, () => stderr);
   if (first.state !== "ready") {
-    throw new Error(
-      first.message || `could not prepare the ${host.platformName} clipboard`,
+    throw Object.assign(
+      new Error(
+        first.message || `could not prepare the ${host.platformName} clipboard`,
+      ),
+      first.code ? { code: first.code } : {},
     );
   }
 
@@ -670,6 +732,8 @@ const WIN32_CLIPBOARD_HOST_COMMAND = Buffer.from(
 export const __testing = {
   beginNativeClipboardTransaction,
   beginWin32ClipboardTransaction,
+  beginLinuxClipboardTransaction,
+  LINUX_CLIPBOARD_HOST,
   windowsHtmlClipboardFormat,
   WIN32_CLIPBOARD_HOST,
 };

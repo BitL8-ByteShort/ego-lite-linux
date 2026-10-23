@@ -173,8 +173,8 @@ test("clipboard transactions are serialized within one runtime", async () => {
 
 test("paste explains the supported clipboard platforms", async () => {
   await assert.rejects(
-    () => __testing.beginNativeClipboardTransaction("temporary", "linux"),
-    /requires macOS or Windows clipboard support.*insertText/,
+    () => __testing.beginNativeClipboardTransaction("temporary", "freebsd"),
+    /requires macOS, Windows, or Linux clipboard support.*insertText/,
   );
 });
 
@@ -311,4 +311,36 @@ test("Windows clipboard restore errors keep the host's message", async () => {
   );
 
   await assert.rejects(() => transaction.finish(), /OpenClipboard failed/);
+});
+
+test("Linux clipboard rejects native Wayland before starting a host", async () => {
+  await assert.rejects(
+    () =>
+      __testing.beginLinuxClipboardTransaction("temporary", {
+        env: { WAYLAND_DISPLAY: "wayland-0", DISPLAY: ":0" },
+      }),
+    (error) =>
+      error.code === "EGO_CLIPBOARD_UNSAFE_BACKEND" &&
+      /insertText/.test(error.message),
+  );
+});
+
+test("Linux clipboard explains missing desktop access before starting a host", async () => {
+  await assert.rejects(
+    () => __testing.beginLinuxClipboardTransaction("temporary", { env: {} }),
+    (error) =>
+      error.code === "EGO_CLIPBOARD_UNAVAILABLE" && /X11/.test(error.message),
+  );
+});
+
+test("Linux clipboard reports an actionable missing Python dependency", async () => {
+  await assert.rejects(
+    () =>
+      __testing.beginLinuxClipboardTransaction("temporary", {
+        env: { DISPLAY: ":test", PATH: "/ego-no-such-tools" },
+      }),
+    (error) =>
+      error.code === "EGO_CLIPBOARD_UNAVAILABLE" &&
+      /Python 3.*insertText/.test(error.message),
+  );
 });

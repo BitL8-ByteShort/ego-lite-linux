@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ego lite (Community Linux)
+Comment=Persistent browser profiles and agent task spaces
+Exec=ego-lite
+Terminal=false
+Categories=Network;WebBrowser;
+StartupNotify=true
+X-Ego-Lite-Linux-Managed=true

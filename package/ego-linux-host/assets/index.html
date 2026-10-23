@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width"
+  /><title>ego lite Linux · Spaces</title
+  ><link rel="stylesheet" href="/style.css" />
+  <script src="/app.js" defer></script>
+  <main>
+    <header>
+      <span class="badge">COMMUNITY LINUX BUILD</span>
+      <h1>Spaces</h1>
+      <p>
+        Sign in once in personal browsing. Tasks in this profile share your
+        sign-ins and website storage. Use separate profiles for separate
+        accounts.
+      </p>
+    </header>
+    <section aria-label="Profile">
+      <h2 id="profile">Loading profile…</h2>
+      <div class="actions">
+        <button id="personal">Open personal browsing</button
+        ><select id="profiles" aria-label="Profile"></select
+        ><button id="openProfile">Open profile</button>
+        <form id="newProfile">
+          <input
+            name="profile"
+            aria-label="New profile name"
+            placeholder="New profile ID"
+            required
+            pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,47}"
+          /><button>Create profile</button>
+        </form>
+      </div>
+    </section>
+    <section>
+      <div class="actions">
+        <h2>Tasks</h2>
+        <button id="pauseAll">Pause all</button
+        ><button id="stop">Stop this browser</button>
+      </div>
+      <form id="newTask">
+        <input
+          name="name"
+          aria-label="Task name"
+          placeholder="Task name"
+          required
+        /><button>Create task</button>
+      </form>
+      <p>
+        Take control stops future agent commands. An action already sent to a
+        website may have completed. Resume agent clears the user pause.
+      </p>
+      <div id="tasks"></div>
+    </section>
+    <section>
+      <h2>Your inbox</h2>
+      <p>
+        Restored and personal tabs stay under your control. Assign a tab to a
+        task here before an agent can use it.
+      </p>
+      <div id="inbox"></div>
+    </section>
+    <p id="feedback" role="status" aria-live="polite"></p>
+  </main>
+</html>
