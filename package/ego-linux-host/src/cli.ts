@@ -97,11 +97,24 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
       return 0;
     }
     if (["status", "stop", "open"].includes(options.command)) {
-      connected = await connectHost(
-        options.profile,
-        options.agentId,
-        options.command === "open",
-      );
+      try {
+        connected = await connectHost(
+          options.profile,
+          options.agentId,
+          options.command === "open",
+        );
+      } catch (error) {
+        if (
+          options.command === "stop" &&
+          ["ENOENT", "ECONNREFUSED"].includes((error as any).code)
+        ) {
+          process.stdout.write(
+            JSON.stringify({ stopped: true, alreadyStopped: true }) + "\n",
+          );
+          return 0;
+        }
+        throw error;
+      }
       const result = await connected.connection.call(options.command);
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       if (options.command === "stop") {

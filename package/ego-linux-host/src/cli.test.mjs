@@ -25,3 +25,26 @@ test("SDK payload validates bundle and matching guides before launch", async () 
 test("help does not swallow extra unknown arguments", () => {
   assert.throws(() => parseArguments(["--help", "--bad"]), /Usage/);
 });
+test("stop succeeds idempotently when no owned daemon is running", async () => {
+  const { mkdtemp, mkdir, rm } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const dir = await mkdtemp("/tmp/ego-cli-stop-");
+  const keys = ["HOME", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_RUNTIME_DIR"];
+  const previous = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+  try {
+    process.env.HOME = dir;
+    process.env.XDG_DATA_HOME = join(dir, "data");
+    process.env.XDG_CONFIG_HOME = join(dir, "config");
+    process.env.XDG_RUNTIME_DIR = join(dir, "run");
+    await mkdir(process.env.XDG_RUNTIME_DIR, { mode: 0o700 });
+    const { runCli } = await import("../dist/src/cli.js");
+    assert.equal(await runCli(["stop", "--profile", "not-running"]), 0);
+  } finally {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+    await rm(dir, { recursive: true, force: true });
+  }
+});
