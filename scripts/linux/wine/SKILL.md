@@ -15,9 +15,30 @@ Run scripts from the Linux shell using the installed wrapper:
 ```bash
 ego-browser nodejs <<'JS'
 const task = await taskSpace("browser task");
-console.log(await task.page("p1").snapshot());
+console.log({spaceId: task.spaceId});
+const page = task.page("p1");
+console.log(await page.snapshot());
+// Once after creating the Space: raise the native UI on this Wine desktop.
+const window = await page.cdp("Browser.getWindowForTarget", {});
+if (["normal", "maximized"].includes(window.bounds.windowState)) {
+  await page.cdp("Browser.setWindowBounds", {
+    windowId: window.windowId, bounds: {windowState: "normal"},
+  });
+  if (window.bounds.windowState === "maximized") {
+    await page.cdp("Browser.setWindowBounds", {
+      windowId: window.windowId, bounds: {windowState: "maximized"},
+    });
+  }
+}
 JS
 ```
+
+Wine can put an empty backing window in front when a new TaskSpace is created.
+The native window calls above restore the real ego UI while preserving its
+maximized state. Apply them once for a newly created Space, while you own it;
+do not repeatedly change windows during a task or after a human takeover.
+Use the native Spaces button to view the agent's live preview or select its
+page. Agent Pages remain usable while the personal Space is displayed.
 
 The wrapper forwards arguments and stdin to the official Windows CLI. The native
 app supplies the SDK and browser bindings. Use the guide's Bash syntax; its

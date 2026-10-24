@@ -2,7 +2,28 @@
 
 ## Current direction — official browser through Wine
 
-Chris superseded the community Chromium-host approach with the actual official ego browser. The MSI now has the official Windows ego lite 0.6.0.22 app running under Wine 11.20, with its own bundled native agent CLI and Spaces interface. Continue this route; the historical host test results below do not qualify the Wine installation. See [WINE.md](WINE.md) for the installed commands, passed native-agent checks, and remaining blank Space-preview limitation.
+Chris superseded the community Chromium-host approach with the actual official ego browser. The MSI now has the official Windows ego lite 0.6.0.22 app running under Wine 11.20, with its own bundled native agent CLI and Spaces interface. Continue this route; the historical host test results below do not qualify the Wine installation. See [WINE.md](WINE.md) for the installed commands, passed native-agent checks, and the verified startup and Space-preview repairs.
+
+## Official Wine startup and preview repair — 2026-10-23
+
+- Contained the looping vendor updater inside the dedicated Wine prefix. Its
+  processes stopped returning; a fully stopped Wine session displayed the
+  browser within about nine seconds instead of roughly a minute.
+- Traced blank thumbnails through successful capture and delivery to an empty
+  image model. The official 0.6.0.22 CPU callback reads a moved-from shared-memory
+  pointer. The hash-guarded four-byte repair reads from the owning release
+  context instead. Original module backed up; stock Wine DLLs and
+  software rendering retained.
+- Visually verified real Google and local fixture thumbnails in native Spaces,
+  live note changes appearing in the preview, and maximized/restored layouts.
+- Added repeatable repair/updater integration and the GPT Dot prompt. See
+  [WINE.md](WINE.md) for exact hashes, rollback and update requirements.
+- Final cold launch plus six native agent checks passed in 8.738 seconds;
+  browser readiness alone is 6.7–7.0 seconds. New TaskSpaces can expose a
+  blank backing window under Wine; the installed entry skill and Dot prompt
+  include the verified native-CDP restore/maximize workaround. Live Spaces
+  previews and page selection work after that step. Full Mac window parity is
+  not claimed.
 
 ## Preparation — 2026-10-23
 

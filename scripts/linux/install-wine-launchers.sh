@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Integrate an existing official Windows installation; no browser download,
-# Wine prefix mutation, app launch, or administrator access is performed.
+# Integrate an existing official Windows installation and contain its unsupported
+# updater service inside the dedicated prefix. No browser download or launch.
 ego_source_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/wine" && pwd)
 ego_prefix="${HOME:?HOME must be set}/.local/share/ego-wine"
 ego_wine="$HOME/.local/opt/ego-wine-runtime/opt/wine-devel/bin/wine"
@@ -26,6 +26,8 @@ if (( ${#ego_cli_files[@]} == 0 )); then
   exit 1
 fi
 bash -n "$ego_source_dir/ego-browser" "$ego_source_dir/ego-lite-wine"
+python3 "$ego_source_dir/repair-previews.py"
+python3 "$ego_source_dir/configure-updater.py"
 
 # Preserve symlinks themselves, including the previous community CLI, rather
 # than following them or editing any repository they point into.
@@ -36,6 +38,8 @@ for ego_relative_path in \
   .local/bin/ego-browser \
   .local/bin/ego-lite-wine \
   .local/lib/ego-wine/activate-window.py \
+  .local/lib/ego-wine/configure-updater.py \
+  .local/lib/ego-wine/repair-previews.py \
   .local/share/applications/ego-lite-wine.desktop \
   .agents/skills/ego-browser; do
   ego_existing_path="$HOME/$ego_relative_path"
@@ -49,6 +53,8 @@ mkdir -p "$HOME/.local/bin" "$HOME/.local/lib/ego-wine" "$HOME/.local/share/appl
 install -m 755 "$ego_source_dir/ego-browser" "$HOME/.local/bin/ego-browser"
 install -m 755 "$ego_source_dir/ego-lite-wine" "$HOME/.local/bin/ego-lite-wine"
 install -m 644 "$ego_source_dir/activate-window.py" "$HOME/.local/lib/ego-wine/activate-window.py"
+install -m 755 "$ego_source_dir/configure-updater.py" "$HOME/.local/lib/ego-wine/configure-updater.py"
+install -m 755 "$ego_source_dir/repair-previews.py" "$HOME/.local/lib/ego-wine/repair-previews.py"
 install -m 644 "$ego_source_dir/SKILL.md" "$HOME/.agents/skills/ego-browser/SKILL.md"
 
 # HOME is an ordinary Linux desktop-user home (for the MSI: /home/wong).
@@ -65,3 +71,4 @@ if command -v update-desktop-database >/dev/null; then
 fi
 printf 'Installed ego lite (Wine), ego-browser, and the native CLI entry skill.\nBackup: %s\n' "$ego_backup_dir"
 printf '%s\n' 'Use ego-browser skill from a shell with ~/.local/bin on PATH; open ego lite (Wine) from the desktop application menu.'
+printf '%s\n' 'After an official offline upgrade, rerun ~/.local/lib/ego-wine/configure-updater.py to keep the unsupported updater service disabled.'

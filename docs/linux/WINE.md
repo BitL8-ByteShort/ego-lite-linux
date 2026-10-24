@@ -2,8 +2,9 @@
 
 This route runs the official Windows ego lite application and its bundled
 `ego-browser.exe` on the MSI Linux desktop. The repository supplies two Linux
-launch wrappers and an agent entry skill. Browser binaries and Wine DLLs are not
-included or modified by the integration installer.
+launch wrappers and an agent entry skill. Vendor binaries are not redistributed. The integration applies a verified,
+reversible four-byte repair to the official browser’s software thumbnail path;
+Wine DLLs remain stock.
 
 ## Existing installation required
 
@@ -33,6 +34,13 @@ desktop user:
 bash scripts/linux/install-wine-launchers.sh
 ```
 
+The local integration-only artifact is
+`dist/linux/ego-wine-integration-0.6.0.22-r1.tar.gz`, with its adjacent SHA-256
+file and file manifest. It contains these wrappers, repair helpers and guides;
+it requires the existing official MSI installation. After checking the
+checksum, extract it and run
+`bash ego-wine-integration-0.6.0.22-r1/scripts/linux/install-wine-launchers.sh`.
+
 It installs `~/.local/bin/ego-lite-wine`, `~/.local/bin/ego-browser`, an
 **ego lite (Wine)** desktop entry, and `~/.agents/skills/ego-browser/SKILL.md`.
 Existing replacements, including an old `ego-browser` symlink and the complete
@@ -40,6 +48,8 @@ old skill directory, are moved into the printed backup directory under
 `~/.local/state/ego-wine-launchers/`. Their relative paths are preserved.
 The script does not change shell startup files; `~/.local/bin` must be on PATH.
 Python 3 and the desktop's libX11 are used by the small window activation helper.
+Quit ego before the first installation so its preview module can be repaired.
+Reinstalling the integration after that repair is idempotent.
 Opening the desktop launcher with no URL focuses the topmost visible ego window
 belonging to this user and this Wine prefix. URL arguments are passed directly
 to the official browser. The helper lives under `~/.local/lib/ego-wine/`.
@@ -83,9 +93,11 @@ live checks passed HTTPS navigation, screenshots, storage persistence after
 browser restart, and agent-to-user control handoff. The real Spaces interface
 creates and switches spaces.
 
-Space preview thumbnails remain blank in this Wine/software-rendering setup.
-Disabling Windows native occlusion did not repair them and is not retained.
-This is a known visual limitation; pixel parity with the Mac has not been met.
+The software preview repair displays real page thumbnails in the native Spaces
+switcher. Live changes to the test page appeared in its card, and both restored
+and maximized window sizes passed visual checks. The repair uses the final
+software-rendering flags above; the experimental Vulkan/DXVK configurations
+were removed.
 The profile and saved site data persisted, but the forced-restart test did not
 restore the prior managed tab automatically; navigation back to the fixture
 confirmed its saved state.
@@ -97,5 +109,64 @@ login flows have not been qualified.
 
 The final launcher was tested from the MSI desktop after a clean native Quit.
 Cold launch opened one browser window; opening the shortcut again reactivated
-the same X11 window ID without adding a window. Cold startup took roughly a
-minute on this remote desktop.
+the same X11 window ID without adding a window. The original roughly one-minute startup was traced to the Windows updater
+service repeatedly spawning processes. At its peak, 81 updater processes used
+about 10.7 CPU cores. The dedicated-prefix service is now disabled, and a fully
+stopped Wine session displayed the browser within about nine seconds.
+
+Cold native-agent readiness measured 6.7–7.0 seconds after containing the
+updater; the final cold launch plus all six agent checks completed in 8.738
+seconds. Wine can still place an empty backing window in front when a new
+TaskSpace opens. This is separate from the repaired thumbnails. The installed
+entry skill includes a verified native-CDP restore/maximize step, applied once
+at Space creation, that raises the real Spaces interface. The native switcher
+then selects the agent page and displays its live preview. This is a qualified
+workaround, not a claim that Wine window behavior matches macOS in every case.
+
+
+## Repairs and updates
+
+`configure-updater.py` reads the live Wine registry when applying changes, so
+new service versions are found before Wine flushes its registry files. Its
+read-only `--check` reports persisted state without starting Wine. It discovers
+only vendor updater services whose executable
+is inside this dedicated prefix. It preserves prior start modes before changing
+them, disables the unsupported service, and stops only its matching updater and
+COM processes. This avoids repeated background activation under Wine. Browser
+updates must use the official offline installer; the helper prints the command.
+Rerun the helper after an update because service names include the version.
+
+`repair-previews.py` supports only the exact official 0.6.0.22 module. The native
+software capture callback moves the shared-memory mapping into its release
+context, then incorrectly reads the cleared pointer from the moved-from object.
+At RVA `0x340046b` (file offset `0x33ffa6b`), the repair changes
+`mov r8,[rax+8]` to `mov r8,[r13+8]`. This reads pixels from their actual owner
+while preserving the original release callback and lifetime. Capture traces
+showed successful frames, and read-only memory inspection showed the resulting
+empty image model before this repair. The actual native cards displayed page
+content immediately after it.
+
+The script validates the complete module hash, instruction bytes, version and
+installation path. It refuses to modify a running browser or an unknown build,
+backs up the original, and replaces the module atomically. It changes no sandbox
+or agent ownership controls. The local repair changes the module's vendor
+signature; the vendor's original signed file remains in the backup.
+
+| Module | SHA-256 |
+| --- | --- |
+| Original | `2b05f316636d69c025fdc45d51ba64ae7a9cf7527a201fe4ab733f6fa7c7abfa` |
+| Repaired | `9772d11447f75f934fc6c5707dd4829cceabbd6ac782becb855d0f168913a97f` |
+
+Inspect or reverse the repair as the MSI desktop user:
+
+```bash
+python3 ~/.local/lib/ego-wine/repair-previews.py --check
+# Quit ego first to restore the verified original:
+python3 ~/.local/lib/ego-wine/repair-previews.py --restore
+```
+
+The backup is under `~/.local/state/ego-wine-preview-repair/0.6.0.22/`.
+A browser update requires new hash and code qualification before this repair
+can be applied. Do not copy these four bytes into a different build.
+
+See [the GPT Dot prompt](GPT-DOT-PROMPT.md) for the actual MSI agent workflow.
