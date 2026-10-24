@@ -112,6 +112,9 @@ if [[ ${1-} == nodejs ]]; then
   fi
   flock -u 9
   exec 9>&-
+  if ! python3 "$HOME/.local/lib/ego-wine/start-window-guard.py"; then
+    printf '%s\n' 'ego native window compatibility is unavailable; continuing with the official browser. Inspect ~/.local/state/ego-wine-window-guard/guard.log.' >&2
+  fi
 fi
 
 # exec preserves stdin, stdout, stderr, arguments, and the CLI's exit status.

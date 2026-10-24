@@ -35,11 +35,11 @@ bash scripts/linux/install-wine-launchers.sh
 ```
 
 The local integration-only artifact is
-`dist/linux/ego-wine-integration-0.6.0.22-r1.tar.gz`, with its adjacent SHA-256
+`dist/linux/ego-wine-integration-0.6.0.22-r2.tar.gz`, with its adjacent SHA-256
 file and file manifest. It contains these wrappers, repair helpers and guides;
 it requires the existing official MSI installation. After checking the
 checksum, extract it and run
-`bash ego-wine-integration-0.6.0.22-r1/scripts/linux/install-wine-launchers.sh`.
+`bash ego-wine-integration-0.6.0.22-r2/scripts/linux/install-wine-launchers.sh`.
 
 It installs `~/.local/bin/ego-lite-wine`, `~/.local/bin/ego-browser`, an
 **ego lite (Wine)** desktop entry, and `~/.agents/skills/ego-browser/SKILL.md`.
@@ -48,11 +48,14 @@ old skill directory, are moved into the printed backup directory under
 `~/.local/state/ego-wine-launchers/`. Their relative paths are preserved.
 The script does not change shell startup files; `~/.local/bin` must be on PATH.
 Python 3 and the desktop's libX11 are used by the small window activation helper.
+The installer builds the native window guard with x86_64 MinGW GCC (the MSI's
+existing user-local compiler is supported). No browser rebuild is performed.
 Quit ego before the first installation so its preview module can be repaired.
 Reinstalling the integration after that repair is idempotent.
-Opening the desktop launcher with no URL focuses the topmost visible ego window
-belonging to this user and this Wine prefix. URL arguments are passed directly
-to the official browser. The helper lives under `~/.local/lib/ego-wine/`.
+Opening the desktop launcher with no URL focuses the genuine native ego UI
+identified by the guard. A hidden or closed UI is reopened through the official
+app. URL arguments are passed directly to the official browser. Helpers live
+under `~/.local/lib/ego-wine/`.
 
 The browser wrapper inherits the active display/session and uses:
 
@@ -114,14 +117,45 @@ service repeatedly spawning processes. At its peak, 81 updater processes used
 about 10.7 CPU cores. The dedicated-prefix service is now disabled, and a fully
 stopped Wine session displayed the browser within about nine seconds.
 
-Cold native-agent readiness measured 6.7–7.0 seconds after containing the
-updater; the final cold launch plus all six agent checks completed in 8.738
-seconds. Wine can still place an empty backing window in front when a new
-TaskSpace opens. This is separate from the repaired thumbnails. The installed
-entry skill includes a verified native-CDP restore/maximize step, applied once
-at Space creation, that raises the real Spaces interface. The native switcher
-then selects the agent page and displays its live preview. This is a qualified
-workaround, not a claim that Wine window behavior matches macOS in every case.
+Before the automatic window integration, cold native-agent readiness measured
+6.7–7.0 seconds after containing the updater; a cold launch plus all six agent
+checks completed in 8.738 seconds.
+
+## Automatic Space windows
+
+Both installed launchers start one native `window-guard.exe` per browser
+lifetime. Wine exposes the regular browser backing surfaces as top-level
+windows. The guard identifies those separately from the real ego UI and keeps
+their HWNDs hidden. It never restores, maximizes, focuses, closes, or resizes the
+real UI. Agents use the official guide directly, without window-management code.
+
+The guard checks native windows every 100 ms because Wine's object-show events
+miss some newly created Chromium windows. It reads window metadata from only
+the matched browser process and uses the existing native window API; it injects
+no code and changes no browser SDK, profile, sandbox, or task ownership.
+Startup qualifies the complete official 0.6.0.22 module hash before using the
+REA-verified window-host offsets. Unknown builds decline this compatibility
+helper with a warning while the official browser launch continues.
+
+The manager uses a startup lock, prefix/UID/executable checks, PID creation time,
+and a native named mutex to prevent duplicate helpers. The guard exits when its
+browser process ends. Its log and process/window records are under
+`~/.local/state/ego-wine-window-guard/`. The manager's `--stop` option stops only
+its identified helper and is used by integration upgrades.
+
+Live MSI checks cover normal native scripts without window calls, agent fill,
+click, prompt and screenshot while backing windows are hidden, and closing the
+real window followed by reopening it through the actual desktop shortcut.
+Minimize also leaves the desktop clear, background agent snapshots preserve the
+minimized state, and the shortcut restores the genuine interface. A late new
+Space passed the native zero-visible-backing-window check.
+Other existing Spaces are preserved. Full Mac window parity is not claimed.
+
+Run the Linux guard regression tests with:
+
+```bash
+python3 -m unittest discover -s scripts/linux/wine/tests -v
+```
 
 
 ## Repairs and updates

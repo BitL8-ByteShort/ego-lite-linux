@@ -15,6 +15,10 @@ if [[ ! -x "$ego_wine_bin" || ! -f "$ego_app_root/ego.exe" ]]; then
   exit 127
 fi
 
+if ! python3 "$HOME/.local/lib/ego-wine/start-window-guard.py"; then
+  printf '%s\n' 'ego native window compatibility is unavailable; continuing with the official browser. Inspect ~/.local/state/ego-wine-window-guard/guard.log.' >&2
+fi
+
 # A desktop reopen should focus the existing native window. URL launches still
 # go directly to ego so its own tab/window routing remains in charge.
 ego_activation_helper="$HOME/.local/lib/ego-wine/activate-window.py"

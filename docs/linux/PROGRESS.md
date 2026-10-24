@@ -18,12 +18,20 @@ Chris superseded the community Chromium-host approach with the actual official e
   live note changes appearing in the preview, and maximized/restored layouts.
 - Added repeatable repair/updater integration and the GPT Dot prompt. See
   [WINE.md](WINE.md) for exact hashes, rollback and update requirements.
-- Final cold launch plus six native agent checks passed in 8.738 seconds;
-  browser readiness alone is 6.7–7.0 seconds. New TaskSpaces can expose a
-  blank backing window under Wine; the installed entry skill and Dot prompt
-  include the verified native-CDP restore/maximize workaround. Live Spaces
-  previews and page selection work after that step. Full Mac window parity is
-  not claimed.
+- Superseded the manual restore/maximize instructions with an automatic native
+  window guard. It hides only the hash-qualified backing HWNDs, leaves the real
+  ego UI alone, and runs from both installed launchers. Dot scripts contain no
+  window workaround. Desktop reopen uses the identified genuine UI.
+- Closing the real UI no longer leaves blank backing windows behind; reopening
+  the desktop shortcut restores the real interface. Native snapshots, fill,
+  click, prompt and screenshots still pass with backing HWNDs hidden.
+- Minimize stays minimized during agent snapshots; the desktop shortcut restores
+  the genuine interface. Late Space creation leaves zero visible backing HWNDs.
+- Guard startup/process identity and unknown-build regression tests pass on the
+  MSI. The supported official module remains unchanged from the thumbnail
+  repair. Existing user Spaces are preserved.
+- Prior cold launch plus six native agent checks passed in 8.738 seconds;
+  browser readiness alone was 6.7–7.0 seconds before the automatic guard.
 
 ## Preparation — 2026-10-23
 

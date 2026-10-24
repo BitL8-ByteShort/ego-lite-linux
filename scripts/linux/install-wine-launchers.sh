@@ -26,8 +26,12 @@ if (( ${#ego_cli_files[@]} == 0 )); then
   exit 1
 fi
 bash -n "$ego_source_dir/ego-browser" "$ego_source_dir/ego-lite-wine"
+ego_guard_build=$(mktemp -d)
+trap 'rm -rf -- "$ego_guard_build"' EXIT
+bash "$ego_source_dir/build-window-guard.sh" "$ego_guard_build/window-guard.exe"
 python3 "$ego_source_dir/repair-previews.py"
 python3 "$ego_source_dir/configure-updater.py"
+python3 "$ego_source_dir/start-window-guard.py" --stop
 
 # Preserve symlinks themselves, including the previous community CLI, rather
 # than following them or editing any repository they point into.
@@ -40,6 +44,8 @@ for ego_relative_path in \
   .local/lib/ego-wine/activate-window.py \
   .local/lib/ego-wine/configure-updater.py \
   .local/lib/ego-wine/repair-previews.py \
+  .local/lib/ego-wine/start-window-guard.py \
+  .local/lib/ego-wine/window-guard.exe \
   .local/share/applications/ego-lite-wine.desktop \
   .agents/skills/ego-browser; do
   ego_existing_path="$HOME/$ego_relative_path"
@@ -55,6 +61,8 @@ install -m 755 "$ego_source_dir/ego-lite-wine" "$HOME/.local/bin/ego-lite-wine"
 install -m 644 "$ego_source_dir/activate-window.py" "$HOME/.local/lib/ego-wine/activate-window.py"
 install -m 755 "$ego_source_dir/configure-updater.py" "$HOME/.local/lib/ego-wine/configure-updater.py"
 install -m 755 "$ego_source_dir/repair-previews.py" "$HOME/.local/lib/ego-wine/repair-previews.py"
+install -m 755 "$ego_source_dir/start-window-guard.py" "$HOME/.local/lib/ego-wine/start-window-guard.py"
+install -m 755 "$ego_guard_build/window-guard.exe" "$HOME/.local/lib/ego-wine/window-guard.exe"
 install -m 644 "$ego_source_dir/SKILL.md" "$HOME/.agents/skills/ego-browser/SKILL.md"
 
 # HOME is an ordinary Linux desktop-user home (for the MSI: /home/wong).
@@ -68,6 +76,9 @@ chmod 644 "$HOME/.local/share/applications/ego-lite-wine.desktop"
 
 if command -v update-desktop-database >/dev/null; then
   update-desktop-database "$HOME/.local/share/applications"
+fi
+if [[ -n ${DISPLAY-} ]]; then
+  python3 "$HOME/.local/lib/ego-wine/start-window-guard.py"
 fi
 printf 'Installed ego lite (Wine), ego-browser, and the native CLI entry skill.\nBackup: %s\n' "$ego_backup_dir"
 printf '%s\n' 'Use ego-browser skill from a shell with ~/.local/bin on PATH; open ego lite (Wine) from the desktop application menu.'

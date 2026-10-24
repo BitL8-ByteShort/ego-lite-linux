@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Activate an existing visible ego window in this user's dedicated Wine prefix."""
 import ctypes as c
+import json
 import os
 from pathlib import Path
 import time
@@ -40,6 +41,16 @@ class Event(c.Union):
 def main():
     prefix = os.environ.get("WINEPREFIX")
     if not prefix or not os.environ.get("DISPLAY"):
+        return 1
+    # The native guard identifies the actual ego UI by its qualified host type.
+    # Backing windows share its WM_CLASS and often its title; never guess which
+    # one to raise. Missing/hidden UI falls back to the official reopen path.
+    try:
+        record = Path.home() / ".local/state/ego-wine-window-guard/native-window.json"
+        native_window = json.loads(record.read_text())["xid"]
+        if not isinstance(native_window, int) or native_window <= 0:
+            return 1
+    except (OSError, ValueError, KeyError):
         return 1
     try:
         x11 = c.CDLL("libX11.so.6")
@@ -112,6 +123,8 @@ def main():
         if not isinstance(windows, list):
             return 1
         for window in reversed(windows):
+            if window != native_window:
+                continue
             classes = property_value(window, "WM_CLASS")
             if not isinstance(classes, bytes) or b"ego.exe" not in classes.lower().split(b"\0"):
                 continue
