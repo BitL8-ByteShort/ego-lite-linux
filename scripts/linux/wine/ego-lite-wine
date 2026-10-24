@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Keep the graphical session's DISPLAY, XAUTHORITY, and D-Bus environment.
+export WINEPREFIX="${HOME:?HOME must be set}/.local/share/ego-wine"
+export WINEARCH=wow64
+export WINEDLLOVERRIDES='wofutil=d;mscoree,mshtml=d'
+export WINEDEBUG=-all
+
+ego_wine_bin="$HOME/.local/opt/ego-wine-runtime/opt/wine-devel/bin/wine"
+ego_app_root="$WINEPREFIX/drive_c/users/$(id -un)/AppData/Local/Citro Labs/ego lite/Application"
+
+if [[ ! -x "$ego_wine_bin" || ! -f "$ego_app_root/ego.exe" ]]; then
+  printf '%s\n' 'The official ego lite Wine installation is missing.' >&2
+  exit 127
+fi
+
+# A desktop reopen should focus the existing native window. URL launches still
+# go directly to ego so its own tab/window routing remains in charge.
+ego_activation_helper="$HOME/.local/lib/ego-wine/activate-window.py"
+if (( $# == 0 )) && [[ -f $ego_activation_helper ]] && python3 "$ego_activation_helper"; then
+  exit 0
+fi
+
+# Software rendering avoids blank native panels on the MSI Wine desktop.
+# The performance override skips an unsupported optional local-model benchmark.
+exec "$ego_wine_bin" "$ego_app_root/ego.exe" --disable-gpu --disable-features=OptimizationGuideModelExecution --optimization-guide-performance-class=8 "$@"

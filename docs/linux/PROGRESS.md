@@ -1,5 +1,9 @@
 # Linux implementation progress
 
+## Current direction — official browser through Wine
+
+Chris superseded the community Chromium-host approach with the actual official ego browser. The MSI now has the official Windows ego lite 0.6.0.22 app running under Wine 11.20, with its own bundled native agent CLI and Spaces interface. Continue this route; the historical host test results below do not qualify the Wine installation. See [WINE.md](WINE.md) for the installed commands, passed native-agent checks, and remaining blank Space-preview limitation.
+
 ## Preparation — 2026-10-23
 
 - [x] Fork original repository into `BitL8-ByteShort/ego-lite-linux`.

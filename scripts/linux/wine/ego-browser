@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export WINEPREFIX="${HOME:?HOME must be set}/.local/share/ego-wine"
+export WINEARCH=wow64
+export WINEDLLOVERRIDES='wofutil=d;mscoree,mshtml=d'
+export WINEDEBUG=-all
+
+ego_wine_bin="$HOME/.local/opt/ego-wine-runtime/opt/wine-devel/bin/wine"
+ego_app_root="$WINEPREFIX/drive_c/users/$(id -un)/AppData/Local/Citro Labs/ego lite/Application"
+
+if [[ ! -x "$ego_wine_bin" ]]; then
+  printf '%s\n' 'The ego Wine runtime is missing.' >&2
+  exit 127
+fi
+
+# Updates install a new numeric version directory beside the previous version.
+# Only official executables within those directories are eligible.
+shopt -s nullglob
+ego_cli_candidates=()
+for ego_cli_path in "$ego_app_root"/*/ego-browser.exe; do
+  ego_version_dir=${ego_cli_path%/ego-browser.exe}
+  ego_version=${ego_version_dir##*/}
+  if [[ -f "$ego_cli_path" && "$ego_version" =~ ^[0-9]+(\.[0-9]+)+$ ]]; then
+    ego_cli_candidates+=("$ego_cli_path")
+  fi
+done
+
+if (( ${#ego_cli_candidates[@]} == 0 )); then
+  printf '%s\n' 'The official ego-browser.exe is missing from the Wine installation.' >&2
+  exit 127
+fi
+
+ego_cli_path=$(printf '%s\n' "${ego_cli_candidates[@]}" | LC_ALL=C sort -V | tail -n 1)
+
+# The native CLI starts ego.exe itself when no browser is present, omitting the
+# graphics argument required by this Wine installation. Prestart that case.
+if [[ ${1-} == nodejs ]]; then
+  ego_browser_launcher="$HOME/.local/bin/ego-lite-wine"
+  ego_browser_uid=$(id -u)
+  ego_windows_exe="C:/users/$(id -un)/AppData/Local/Citro Labs/ego lite/Application/ego.exe"
+  ego_windows_exe=${ego_windows_exe,,}
+  ego_z_exe="Z:$ego_app_root/ego.exe"
+  ego_z_exe=${ego_z_exe,,}
+
+  ego_find_browser_pid() {
+    local ego_pid ego_argument ego_path_match ego_child ego_prefix_match ego_normalized
+    while IFS= read -r ego_pid; do
+      [[ $ego_pid =~ ^[0-9]+$ && -r /proc/$ego_pid/cmdline && -r /proc/$ego_pid/environ ]] || continue
+      ego_path_match=0
+      ego_child=0
+      while IFS= read -r -d '' ego_argument; do
+        [[ $ego_argument == --type || $ego_argument == --type=* ]] && ego_child=1
+        ego_normalized=${ego_argument//\\//}
+        if [[ $ego_argument == "$ego_app_root/ego.exe" || ${ego_normalized,,} == "$ego_windows_exe" || ${ego_normalized,,} == "$ego_z_exe" ]]; then
+          ego_path_match=1
+        fi
+      done < "/proc/$ego_pid/cmdline"
+      (( ego_path_match == 1 && ego_child == 0 )) || continue
+      ego_prefix_match=0
+      while IFS= read -r -d '' ego_argument; do
+        [[ $ego_argument == "WINEPREFIX=$WINEPREFIX" ]] && ego_prefix_match=1
+      done < "/proc/$ego_pid/environ"
+      if (( ego_prefix_match == 1 )); then
+        printf '%s\n' "$ego_pid"
+        return 0
+      fi
+    done < <(pgrep -u "$ego_browser_uid" -f 'ego[.]exe' || true)
+    return 1
+  }
+
+  for ego_required_tool in pgrep flock; do
+    if ! command -v "$ego_required_tool" >/dev/null; then
+      printf 'The ego Wine wrapper requires %s.\n' "$ego_required_tool" >&2
+      exit 127
+    fi
+  done
+  exec 9>"$WINEPREFIX/.ego-browser-start.lock"
+  if ! flock -x -w 20 9; then
+    printf '%s\n' 'Timed out waiting for another ego browser launch.' >&2
+    exit 1
+  fi
+
+  if ! ego_find_browser_pid >/dev/null; then
+    if [[ ! -x $ego_browser_launcher ]]; then
+      printf 'The browser launcher is missing: %s\n' "$ego_browser_launcher" >&2
+      exit 127
+    fi
+    if [[ -z ${DISPLAY-} && -z ${WAYLAND_DISPLAY-} ]]; then
+      printf '%s\n' 'Start ego-browser from the active graphical session so Wine can open ego lite.' >&2
+      exit 1
+    fi
+    # Do not give the detached browser either the script's stdin or startup lock.
+    nohup "$ego_browser_launcher" </dev/null >>"$WINEPREFIX/ego-browser-launch.log" 2>&1 9>&- &
+    ego_browser_pid=''
+    for ((ego_attempt = 0; ego_attempt < 150; ego_attempt++)); do
+      if ego_browser_pid=$(ego_find_browser_pid); then
+        break
+      fi
+      sleep 0.1
+    done
+    if [[ -z $ego_browser_pid ]]; then
+      printf 'ego lite did not start; inspect %s/ego-browser-launch.log.\n' "$WINEPREFIX" >&2
+      exit 1
+    fi
+    # Catch immediate startup crashes before allowing the CLI to auto-launch.
+    sleep 0.5
+    if ! ego_find_browser_pid >/dev/null; then
+      printf 'ego lite exited during startup; inspect %s/ego-browser-launch.log.\n' "$WINEPREFIX" >&2
+      exit 1
+    fi
+  fi
+  flock -u 9
+  exec 9>&-
+fi
+
+# exec preserves stdin, stdout, stderr, arguments, and the CLI's exit status.
+# This runs the app's bundled SDK; no community SDK override is injected.
+exec "$ego_wine_bin" "$ego_cli_path" "$@"
